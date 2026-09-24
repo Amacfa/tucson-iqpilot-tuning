@@ -22,6 +22,6 @@ Interaction with the live torque learner: controlsd calls `update_live_torque_pa
 
 ## Status
 
-`software_validation_passed` is **false** and `physical_validation_pending` is true: validation so far is offline arithmetic only — physical A/B testing is still pending — so manage.py refuses `--apply` until the flag is flipped after sign-off.
+`software_validation_passed` is **true** (offline scope only: patch/rollback roundtrip, transaction fault-injection, py_compile, open-loop torque replay over 717k logged frames, jerk-limiter unit tests; no closed-loop plant replay). `physical_validation_pending` remains true — physical A/B drive is still outstanding. Rebased to device HEAD 457ea8e2d33eb3f48f5805b35e6dff9a046c312c.
 
 Offline open-loop replay results are in `validation/RESULTS.md` (717,248 active frames >=5 m/s). Mean |torque| candidate vs reconstructed baseline by speed bin: 0.99 at 5-10 m/s (unchanged by design — output there is saturated at the |out|=1.0 clip), 0.94 at 10-15, 0.89 at 15-20, 0.84 at 20-25, 0.81 at 25+. Frame-to-frame torque dither (RMS of change x270) improved in every bin: 7.9->7.0 at 5-10, 3.55->2.79 at 10-15, 3.18->2.23 at 15-20, 3.37->2.17 at 20-25, 3.01->1.90 at 25+. The measurement low-pass alone accounts for roughly the first half of each reduction; the speed schedule supplies the rest.

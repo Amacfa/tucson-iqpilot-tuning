@@ -1,0 +1,21 @@
+{
+  "README.md": "515a22a9d4a9be99f33800c53c4310c197dec45a30a80332141cad784998f510",
+  "candidate/.venv/lib/python3.12/site-packages/iqdbc/car/hyundai/carstate.py": "e361a10649ef2c64750e96df955d7e22b6674832c0393e328210741e32f41449",
+  "candidate/artifacts/package_sources/iqdbc/iqdbc/car/hyundai/carstate.py": "e361a10649ef2c64750e96df955d7e22b6674832c0393e328210741e32f41449",
+  "candidate/iqpilot/sab/behavior.py": "44d607471d712837edf96f865a8537a7fcd4a972f9eb785abe104f2557857326",
+  "candidate/iqpilot/selfdrive/car/card.py": "b993c28077a955fa056a835f95f79fa11cb42695843dfafdf2d96cea810431ba",
+  "candidate/iqpilot/selfdrive/pandad/pandad": "9ca10a2f57f27b465ba3d41b33757e12bd71ad7ab775ae51850ac4e60788e2ce",
+  "candidate/iqpilot/selfdrive/pandad/pandad.cc": "a66a2bafdc6a397a7eb9315662995caf88bad2410cf0a1ef909e1c21d9f5e466",
+  "forward.patch": "fa0e6e327e9ad81f6ad0768e290c6b8dd98d5bf26ee64752c83a138ccb781fd6",
+  "manage.py": "f506e5e3bbea66c08317e2eef01658451028808885df1b8d6ec242bf15af772f",
+  "manifest.json": "8d4f2ce537a3ca14ec8740384ee02ef8ac06efe5951385d68df4327d87eaaea7",
+  "reverse.patch": "4b5f13cf599b3af07a37a7006755172691853e8670b8a946c6ecce2483be11e1",
+  "rollback/.venv/lib/python3.12/site-packages/iqdbc/car/hyundai/carstate.py": "7d62ff2eea091340fa65153a70dc137c8d07c60df6c5128d83761133bb9500ac",
+  "rollback/artifacts/package_sources/iqdbc/iqdbc/car/hyundai/carstate.py": "7d62ff2eea091340fa65153a70dc137c8d07c60df6c5128d83761133bb9500ac",
+  "rollback/iqpilot/sab/behavior.py": "aa0341544c2ee0b14d7e928418dba8203c526d29bbf7b2b643e1d5c0c29a9f4b",
+  "rollback/iqpilot/selfdrive/car/card.py": "66b945442437decc94ab68d412d71a84e0d23d32680fd8cafe771a151bf0cae2",
+  "rollback/iqpilot/selfdrive/pandad/pandad": "07184998ce24d92f2fbd0099913405e42188eab8ce95fbdbc61bae9e62dce505",
+  "rollback/iqpilot/selfdrive/pandad/pandad.cc": "4266f837f75f3c8d2c6fa22c3ba21054aae2ce04e4e5e9670c6316392e6ae00f",
+  "test_artifacts.py": "fb41dfd0d77d63eeb11e5c3ede807b499a42ed711b02cb48658627d2fc437ae4",
+  "test_manage.py": "8e9b2afb1dce9228ed8205f7cd2af462a7ad2088e31328cb301d686e503aa42b"
+}

@@ -1,0 +1,17 @@
+{
+  "README.md": "15e0476c2180256b4572bf1f64aec2aa6fa29ce3b0f8771c76437126cb9ad286",
+  "candidate/.venv/lib/python3.12/site-packages/iqdbc/car/hyundai/carcontroller.py": "a8cf776cefaa8e5cf54621165df58404fa1f85ccece36f9ab11e4274737af7a5",
+  "candidate/.venv/lib/python3.12/site-packages/iqdbc/car/torque_data/params.toml": "f84173d7f2c6a0a216e73374dbd5f28689a32c728d08cb3b067291138ce24b57",
+  "candidate/iqpilot/selfdrive/controls/lib/latcontrol_torque.py": "bb3f78b19a33bff24b05a4723aa5cca754d46c2bde18a6d030a4cff6165aa9bf",
+  "forward.patch": "e5e43f692680761192585ce17a26c6494a0d409b1b8cc7df6e1737baa6da4444",
+  "manage.py": "9b5212c7b1381536c38243d30f81081ee58a76d3e6a8433e6eac33455fe71881",
+  "manifest.json": "1fd18be2a55991c6d028303f067a071c3456be6841f99056445af3bc29b6dd3e",
+  "reverse.patch": "d259ac2cbfea24e4b36160e7233ba5e46597658c8cbf216a7697ca60183a125e",
+  "rollback/.venv/lib/python3.12/site-packages/iqdbc/car/hyundai/carcontroller.py": "6f28ff93766fa412981a0f00dafa455e943b6434d2e9968114e7bbf2625a2a64",
+  "rollback/.venv/lib/python3.12/site-packages/iqdbc/car/torque_data/params.toml": "5753e7d79b23e697b3289378d14cd7f6e25101728d5d9e42086960e6c645c156",
+  "rollback/iqpilot/selfdrive/controls/lib/latcontrol_torque.py": "6578845cf1f7f138203eade26eb9dc301bfe221d66272f81bb095bf9788aec31",
+  "test_artifacts.py": "4436811fc4d185f61b431300c4768214fffd0893532ca1ca1512bc7fef6212fb",
+  "test_manage.py": "6b7c2e41314a7023187b5b651407057d6a78f1ee64b71fb120eeeb39cfcb1aa6",
+  "validation/RESULTS.md": "a8c2b3fcc3292e97e9ff537f6944f691cf7f6ee03291dc3122a67b7ff1c0eacf",
+  "validation/replay_torque.py": "3f874053954de3a93e8763d41c477a894758ec24114a971169f3c45b62c3d628"
+}
