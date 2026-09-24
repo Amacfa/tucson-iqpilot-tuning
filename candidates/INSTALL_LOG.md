@@ -62,3 +62,8 @@ tune:   {"apply_rollback_exact": true, "partial_write_failure_restores_originals
 ```
 
 Physical A/B drive remains pending (`physical_validation_pending`).
+
+## Fingerprint package (CW020, 457ea8e)
+
+- 2026-09-24: built `tucson-fingerprint-457ea8e/package` (adds `99211-CW020` fwdCamera FW under `HYUNDAI_TUCSON_4TH_GEN`; in stock 457ea8e it exists only under `HYUNDAI_SANTA_CRUZ_1ST_GEN`). Baseline fingerprints.py verified byte-identical on device (`dd31c382`, both paths). Local tests: artifacts hashes + patch roundtrip + py_compile all true; manage guards all true.
+- Staged at `/data/tucson_stage/fingerprint-457ea8e/package/`; `--check` → `{"check_passed": true, "changes_made": false, "head": "457ea8e2d33eb3f48f5805b35e6dff9a046c312c"}`. **NOT applied** — readiness `check_only`; physical parked fingerprintSource="fw" check pending.

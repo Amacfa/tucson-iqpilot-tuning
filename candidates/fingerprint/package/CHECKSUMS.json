@@ -1,0 +1,13 @@
+{
+  "README.md": "af1876283e1dbb05d93ef334a4b076dd06ae2e4d9eab87dde5495a8213c71684",
+  "candidate/.venv/lib/python3.12/site-packages/iqdbc/car/hyundai/fingerprints.py": "19d864059fbc1486b563b0fc88a2f41e5e7c8fc86d11ec9789e5d3ac32534a99",
+  "candidate/artifacts/package_sources/iqdbc/iqdbc/car/hyundai/fingerprints.py": "19d864059fbc1486b563b0fc88a2f41e5e7c8fc86d11ec9789e5d3ac32534a99",
+  "forward.patch": "cb987d4786b423fc2eda2a4a9020b34ace42ec6e71b9e96ebddb148392b112a8",
+  "manage.py": "9b5212c7b1381536c38243d30f81081ee58a76d3e6a8433e6eac33455fe71881",
+  "manifest.json": "d94cfb52feea1232d257b0c25fca1fe3598cdddaa90cf8561b6db93a1a02c628",
+  "reverse.patch": "d7aac34d0ae052f26a414c63124a8fbc05ad8d40f93cc20a90d56c3078de86d7",
+  "rollback/.venv/lib/python3.12/site-packages/iqdbc/car/hyundai/fingerprints.py": "dd31c382234e9c94faaca15f07dc6455d76aa902897f8393f8a4617753148e01",
+  "rollback/artifacts/package_sources/iqdbc/iqdbc/car/hyundai/fingerprints.py": "dd31c382234e9c94faaca15f07dc6455d76aa902897f8393f8a4617753148e01",
+  "test_artifacts.py": "4436811fc4d185f61b431300c4768214fffd0893532ca1ca1512bc7fef6212fb",
+  "test_manage.py": "6b7c2e41314a7023187b5b651407057d6a78f1ee64b71fb120eeeb39cfcb1aa6"
+}
