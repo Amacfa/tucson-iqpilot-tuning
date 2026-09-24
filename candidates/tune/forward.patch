@@ -1,0 +1,80 @@
+--- a/iqpilot/selfdrive/controls/lib/latcontrol_torque.py
++++ b/iqpilot/selfdrive/controls/lib/latcontrol_torque.py
+@@ -497,6 +497,13 @@
+ LAT_ACCEL_REQUEST_BUFFER_SECONDS = 1.0
+ VERSION = 1
+ 
++# Per-platform speed-scheduled latAccelFactor (m/s^2 per unit torque), replacing the static value.
++LAT_ACCEL_FACTOR_SPEED_TABLE = {
++  "HYUNDAI_TUCSON_4TH_GEN": ([8.0, 15.0, 25.0], [2.95, 3.35, 3.70]),
++}
++# First-order low-pass on the measured lateral acceleration used by the feedback path.
++MEASUREMENT_LP_TAU_S = 0.06
++
+ class LatControlTorque(LatControl):
+   supports_legacy_curvature_lookahead = True
+ 
+@@ -521,6 +528,8 @@
+     self.setpoint_lead_enabled = CP.brand == "toyota" and bool(CP.flags & ToyotaFlags.TSS2)
+     self.setpoint_lead_filter = FirstOrderFilter(0.0, 1 / (2 * np.pi * LP_FILTER_CUTOFF_HZ), self.dt)
+     self.lateral_acceleration_slew_limiter = LateralAccelerationSlewLimiter(Params().get_bool("IQLateralAccelSlew"))
++    self.lat_accel_factor_speed_table = LAT_ACCEL_FACTOR_SPEED_TABLE.get(str(CP.carFingerprint))
++    self.measurement_filter = FirstOrderFilter(0.0, MEASUREMENT_LP_TAU_S, self.dt) if self.hkg_reduced_torque_feedback else None
+ 
+     self.nnff_assist = NeuralNetworkFeedForward(self, CP, CP_IQ, CI)
+ 
+@@ -539,6 +548,17 @@
+     pid_log.version = VERSION
+     measured_curvature = -VM.calc_curvature(math.radians(CS.steeringAngleDeg - params.angleOffsetDeg), CS.vEgo, params.roll)
+     measurement = measured_curvature * CS.vEgo ** 2
++    if self.measurement_filter is not None:
++      if not active:
++        self.measurement_filter.x = measurement
++      feedback_measurement = self.measurement_filter.update(measurement)
++    else:
++      feedback_measurement = measurement
++    if self.lat_accel_factor_speed_table is not None:
++      scheduled_factor = float(np.interp(CS.vEgo, *self.lat_accel_factor_speed_table))
++      if scheduled_factor != self.torque_params.latAccelFactor:
++        self.torque_params.latAccelFactor = scheduled_factor
++        self.update_limits()
+     target_curvature = desired_curvature
+     if not active and self.lateral_acceleration_slew_limiter.enabled:
+       self.lateral_acceleration_slew_limiter.reset(target_curvature * CS.vEgo ** 2)
+@@ -556,7 +576,7 @@
+     if self.setpoint_lead_enabled:
+       request_ramp_rate = (future_desired_lateral_accel - expected_lateral_accel) / max(lat_delay, self.dt)
+       setpoint += self.setpoint_lead_filter.update(request_ramp_rate) * lat_delay
+-    error = setpoint - measurement
++    error = setpoint - feedback_measurement
+ 
+     lookahead_idx = int(np.clip(-delay_frames + self.lookahead_frames, -self.lat_accel_request_buffer_len+1, -2))
+     raw_lateral_jerk = (self.lat_accel_request_buffer[lookahead_idx+1] - self.lat_accel_request_buffer[lookahead_idx-1]) / (2 * self.dt)
+--- a/.venv/lib/python3.12/site-packages/iqdbc/car/hyundai/carcontroller.py
++++ b/.venv/lib/python3.12/site-packages/iqdbc/car/hyundai/carcontroller.py
+@@ -797,7 +797,13 @@
+         jerk_l_raw = np.clip(jerk_l_base + 2.0 * max(0.0, -accel - 2.8), jerk_l_base, jerk_max_l)
+         jerk_l_mpc = np.clip(-self.jerk * 4.0, jerk_l_base, jerk_max_l)
+ 
+-        self.jerk_u = min(max(self.jerk_u_min, self.jerk * 2.0), jerk_max_u)
++        # Same treatment for acceleration authority: a floor plus a raw-request boost, so positive
++        # requests are not held to the 0.5 m/s^3 ramp once the MPC jerk settles.
++        jerk_u_base = 1.0
++        jerk_u_raw = np.clip(jerk_u_base + 2.0 * max(0.0, accel - 1.0), jerk_u_base, jerk_max_u)
++        jerk_u_mpc = np.clip(self.jerk * 2.0, jerk_u_base, jerk_max_u)
++
++        self.jerk_u = max(jerk_u_raw, jerk_u_mpc)
+         self.jerk_l = max(jerk_l_raw, jerk_l_mpc)
+         self.cb_upper = self.cb_lower = 0.0
+       else:
+--- a/.venv/lib/python3.12/site-packages/iqdbc/car/torque_data/params.toml
++++ b/.venv/lib/python3.12/site-packages/iqdbc/car/torque_data/params.toml
+@@ -36,7 +36,7 @@
+ "HYUNDAI_SONATA_LF" = [2.2200457811703953, 1.2967330275895228, 0.14039920986586393]
+ "HYUNDAI_SONATA" = [2.9638737459977467, 2.1259108157250735, 0.07813665616927593]
+ "HYUNDAI_SONATA_HYBRID" = [2.8990264092395734, 2.061410192222139, 0.0899805488717382]
+-"HYUNDAI_TUCSON_4TH_GEN" = [2.960174, 2.860284, 0.108745]
++"HYUNDAI_TUCSON_4TH_GEN" = [2.960174, 2.860284, 0.12]
+ "HYUNDAI_SANTAFE_MX5" = [3.2, 3.0, 0.05]
+ "HYUNDAI_SANTAFE_MX5_HEV" = [3.2, 3.0, 0.05]
+ "JEEP_GRAND_CHEROKEE_2019" = [2.30972, 1.289689569171081, 0.117048]

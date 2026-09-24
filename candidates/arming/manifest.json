@@ -1,0 +1,133 @@
+{
+  "name": "Tucson arming/warning repair (no F1B) for release-candidate 0b8c190c",
+  "created_utc": "2026-09-24T03:41:01.815263+00:00",
+  "head": "0b8c190c59637d10ccd76525f6685c7d3b964264",
+  "software_validation_passed": true,
+  "physical_validation_pending": true,
+  "runtime_validation_pending": false,
+  "required_params": {
+    "AutoEngage": 0,
+    "AolEnabled": true,
+    "AolMainCruiseAllowed": true,
+    "AolUnifiedEngagementMode": true,
+    "AolSteeringMode": 0,
+    "AolPauseOnSteeringOverride": false,
+    "LateralManeuverMode": false,
+    "JoystickDebugMode": false,
+    "IQHkgReducedTorqueFeedback": true,
+    "NeuralNetworkFeedForward": false,
+    "IQLateralAccelSlew": true
+  },
+  "fingerprint": "HYUNDAI_TUCSON_4TH_GEN",
+  "car_flags": 8206,
+  "car_ext_flags": 132,
+  "iq_flags": 4,
+  "iq_safety_flags": 32,
+  "safety_param": 44,
+  "alternative_experience": 1024,
+  "original_controller_retained": true,
+  "F1B_installed": false,
+  "F1B_candidate": false,
+  "torque_controller_sha256": "6578845cf1f7f138203eade26eb9dc301bfe221d66272f81bb095bf9788aec31",
+  "candidate_controller_sha256": "6578845cf1f7f138203eade26eb9dc301bfe221d66272f81bb095bf9788aec31",
+  "files": [
+    {
+      "path": "iqpilot/selfdrive/pandad/pandad",
+      "original_sha256": "8bc7cf6325258684c7c2decbcb4a7d9a6e0d3673fbd79c10ef30d47b29c8c5da",
+      "candidate_sha256": "a4bf4daa9130b780907fe4664135457d78924deeb654e3396fc755a3ccbe66a9",
+      "mode": 493
+    },
+    {
+      "path": "iqpilot/selfdrive/pandad/pandad.cc",
+      "original_sha256": "4266f837f75f3c8d2c6fa22c3ba21054aae2ce04e4e5e9670c6316392e6ae00f",
+      "candidate_sha256": "a66a2bafdc6a397a7eb9315662995caf88bad2410cf0a1ef909e1c21d9f5e466",
+      "mode": 420
+    },
+    {
+      "path": "iqpilot/selfdrive/car/card.py",
+      "original_sha256": "66b945442437decc94ab68d412d71a84e0d23d32680fd8cafe771a151bf0cae2",
+      "candidate_sha256": "b993c28077a955fa056a835f95f79fa11cb42695843dfafdf2d96cea810431ba",
+      "mode": 493
+    },
+    {
+      "path": "iqpilot/sab/behavior.py",
+      "original_sha256": "aa0341544c2ee0b14d7e928418dba8203c526d29bbf7b2b643e1d5c0c29a9f4b",
+      "candidate_sha256": "44d607471d712837edf96f865a8537a7fcd4a972f9eb785abe104f2557857326",
+      "mode": 420
+    },
+    {
+      "path": "artifacts/package_sources/iqdbc/iqdbc/car/hyundai/carstate.py",
+      "original_sha256": "7d62ff2eea091340fa65153a70dc137c8d07c60df6c5128d83761133bb9500ac",
+      "candidate_sha256": "e361a10649ef2c64750e96df955d7e22b6674832c0393e328210741e32f41449",
+      "mode": 420
+    },
+    {
+      "path": ".venv/lib/python3.12/site-packages/iqdbc/car/hyundai/carstate.py",
+      "original_sha256": "7d62ff2eea091340fa65153a70dc137c8d07c60df6c5128d83761133bb9500ac",
+      "candidate_sha256": "e361a10649ef2c64750e96df955d7e22b6674832c0393e328210741e32f41449",
+      "mode": 420
+    }
+  ],
+  "native_build_dependencies": {
+    "iqpilot/selfdrive/pandad/main.o": "114c047dbdfc690cea5240e558ad3689e90beceaf6c31710c75f857a356ab0a4",
+    "iqpilot/selfdrive/pandad/panda_safety.o": "59f18fb7a1bb00edd2bf44f630c48afee1d83d5487fbfdd43169d340ef41a0dd",
+    "iqpilot/selfdrive/pandad/libpanda.a": "1f2f6f6422006b933b286618169312a03e9e69a2239f4c2745a172c068240fac",
+    "iqpilot/common/libcommon.a": "ace303b2b077f12f4664d65bdfa0009c75f552825c5ce680623bde160fb23737",
+    "iqpilot/cereal/libsocketmaster.a": "5c10fd203307d9d51a159d8e6b0f2caf5bf39ee660ae89f65c332b2e1ac3bea1",
+    "iqpilot/cereal/libcereal.a": "ba0139f0eb6c99e176d3c3884064ea17023963b2173828e05fe11a284b1a4188",
+    ".venv/lib/python3.12/site-packages/msgq/libmsgq.a": "8e3ef6482a4c470f37288cb05c821a7a8b69ebd1bc9a68fa01da6a8e76a29786"
+  },
+  "validation_dependencies": {
+    "iqpilot/selfdrive/controls/controlsd.py": "1cd366d360b88aff56d210905f9f7a79de510c75ed5a21c1803eb6f26a1195e0",
+    "iqpilot/selfdrive/controls/iq_controls_layer.py": "0e4d3020d98bb18a1e45465ef1d5b397ce619670936af746768924329dcc53b3",
+    "iqpilot/selfdrive/controls/steering_fault_recovery.py": "0d676e57c3cd05095dd25e5bea122a30a6f62ae6ee2630ebf2769d9bbc8861cd",
+    "iqpilot/selfdrive/car/car_specific.py": "707baac7c064bd4258731c913b8b81425dea22d55d8b10b3fc2edc64801185d4",
+    "iqpilot/selfdrive/selfdrived/state.py": "fd5aafea6daeb8f13fcaaca1523c695b0979294d5338516816530c822eac9cc5",
+    "iqpilot/selfdrive/selfdrived/events.py": "e1b113565c45271ec5310dd83940dd338ff7fa56a2bf121f864dd58cc0ba1343",
+    "iqpilot/selfdrive/selfdrived/iq_events.py": "489bb9cd81d61bc765c1f4ca71162f975ac7186526d7231fb4c8ad801c361be0",
+    "iqpilot/vehicle/vehicle.py": "9579d14c65106e64030b92a35463fc9aa8acb558d53fca4173f3f370e9c5f022",
+    "iqpilot/selfdrive/pandad/panda_safety.cc": "06b9a2ee00e76ad1cb977187bf7e23f3bd4075677207f542d566151375bf95b7",
+    "launch_iqpilot.sh": "f007bd94909373297a1da82f8d8b9b78c1be61d79ac15984b1c402d61ab9f89c",
+    "launch_chffrplus.sh": "57be4b02465262e7819c1358a429e3e2f8119712ba6cd9f6bf25ad285d64c387",
+    "artifacts/runtime/env_sync.sh": "41bc72c205d23333b927426b3b4ebcf5907341a7201d01715bc263efee1d8737",
+    "iqpilot/system/runtime_packages_verify.py": "920421476a31076a8d9844b118182d0c4651af45221cc047a294bf665e77a5de",
+    "iqpilot/system/runtime_package_sources.py": "2cc7e46156329c2acbf0d3b50b62000ffb1ced74b3794b26560f24796857ef86",
+    "iqpilot/system/runtime_package_build.py": "5b4b25eca6d36f3a30f6f0cc233e89ec2dd88ffdc848e0cb288a39818fbdb611",
+    "iqpilot/system/runtime_wheels_verify.py": "b2927c691ae2e58824f905a9048cebb044f29c59c57d86309e5ee0b01b85e2c2",
+    "uv.lock": "0851ca58329ebb5535fad29f328b49a0dc6aa78eeb9a94b9ac84d3a4cf67eb6b",
+    ".iqpilot-package-lock-sha256": "099af8099949f5f9cf50208cf7667793805aea32c44949af5444912e0e6fcaef",
+    ".venv/lib/python3.12/site-packages/iqdbc/car/hyundai/carcontroller.py": "6f28ff93766fa412981a0f00dafa455e943b6434d2e9968114e7bbf2625a2a64",
+    ".venv/lib/python3.12/site-packages/iqdbc/car/hyundai/hyundaicanfd.py": "9801df0ab6b6ee641d2ad91eb669897b29793e2cb33c1910b5585d8059ee8a1a",
+    ".venv/lib/python3.12/site-packages/iqdbc/car/hyundai/interface.py": "bb9cad4d05be40cbd2193ae28dcde5f0664bc817645ab883018cdeed345d3cc3",
+    ".venv/lib/python3.12/site-packages/iqdbc/car/hyundai/values.py": "3180964e014bedde967b83a5af395e33b545dcb3b276f7f51750c942c394e9be",
+    ".venv/lib/python3.12/site-packages/iqdbc/can/parser.py": "af9b12410dab23307a11ef2b2a75501363d41eec525a1f1727c02672db007080",
+    ".venv/lib/python3.12/site-packages/iqdbc/can/packer.py": "783212cc355390bc8128bedfe16377c61e1cd1d95499e79f2a84a7eb909519f8",
+    "iqpilot/selfdrive/pandad/main.o": "114c047dbdfc690cea5240e558ad3689e90beceaf6c31710c75f857a356ab0a4",
+    "iqpilot/selfdrive/pandad/panda_safety.o": "59f18fb7a1bb00edd2bf44f630c48afee1d83d5487fbfdd43169d340ef41a0dd",
+    "iqpilot/selfdrive/pandad/libpanda.a": "1f2f6f6422006b933b286618169312a03e9e69a2239f4c2745a172c068240fac",
+    "iqpilot/common/libcommon.a": "ace303b2b077f12f4664d65bdfa0009c75f552825c5ce680623bde160fb23737",
+    "iqpilot/cereal/libsocketmaster.a": "5c10fd203307d9d51a159d8e6b0f2caf5bf39ee660ae89f65c332b2e1ac3bea1",
+    "iqpilot/cereal/libcereal.a": "ba0139f0eb6c99e176d3c3884064ea17023963b2173828e05fe11a284b1a4188",
+    ".venv/lib/python3.12/site-packages/msgq/libmsgq.a": "8e3ef6482a4c470f37288cb05c821a7a8b69ebd1bc9a68fa01da6a8e76a29786"
+  },
+  "known_remaining_issue": "Pre-existing unarmed coalesced/normal-MAIN and compound native-CANCEL permission ambiguities are outside this targeted repair. No universal warning-free or all-route zero-reject claim.",
+  "readiness": "ready_for_supervised_parked_installation",
+  "installed": false,
+  "runtime_validation": {
+    "route": "00000023--<redacted> segments 0-2, 0-125s, current-HEAD 0b8c190c recording",
+    "fixture_sha256": "162f10482e400fbb6405978d076e7805a77c89bf46704de7c3ce7d1417a8cb70",
+    "executed_on": "iq-66480b62 (parked, offroad, guarded, non-publishing, private Params, protected state unchanged)",
+    "result": "../validation/route23/result-02.json.gz",
+    "native_policy": "../validation/route23/native-policy-02.json",
+    "summary": {
+      "baseline_rejected_active_lfa_frames": 1103,
+      "baseline_rejected_spans": 21,
+      "candidate_rejected_frames": 0,
+      "candidate_active_frames_in_78.355-114.685s": 0,
+      "candidate_post_SET_parity_ticks": "1031/1031 latActive, long_enabled and LFA torque/request identical to baseline",
+      "original_vs_recorded_lfa_match": 0.9943
+    },
+    "behaviour_change": "Camera MAIN alone no longer arms steering (baseline steered 65.44-78.35s on MAIN only); a SET/RES release is required after any MAIN activity.",
+    "not_covered": "No brake/cancel/resume after the 114.69s engagement exists in route23 (route ends 125s); physical EPS/dashboard behaviour and flashed-Panda behaviour are not validated by replay."
+  }
+}

@@ -1,0 +1,540 @@
+--- a/iqpilot/selfdrive/pandad/pandad.cc
++++ b/iqpilot/selfdrive/pandad/pandad.cc
+@@ -535,10 +535,8 @@
+       engaged_aol = (sm != nullptr) ? process_aol_heartbeat(sm.get(), has_iq_state_service, has_car_params_service) : false;
+       is_onroad = params.getBool("IsOnroad");
+       always_offroad = panda_safety.getOffroadMode();
+-      // Publish fresh health after a safety transition so a ready producer need
+-      // not wait another 100ms before observing that native ownership changed.
+-      panda_safety.configureSafetyMode(is_onroad);
+       process_panda_state(pandas, &pm, engaged, engaged_aol, is_onroad, spoofing_started, always_offroad);
++      panda_safety.configureSafetyMode(is_onroad);
+     }
+ 
+     // Send out peripheralState at 2Hz
+--- a/iqpilot/selfdrive/car/card.py
++++ b/iqpilot/selfdrive/car/card.py
+@@ -219,42 +219,12 @@
+     # log fingerprint in sentry
+     iqpilot_interfaces.log_fingerprint(self.CP)
+ 
+-  def _sync_startup_arming(self, now_nanos):
+-    expected = self.CP.safetyConfigs
+-    states = self.sm['pandaStates']
+-    timestamp = self.sm.logMonoTime['pandaStates']
+-    age_ns = now_nanos - timestamp
+-    healthy = (self.sm.all_alive(['pandaStates']) and self.sm.valid['pandaStates']
+-               and 0 <= age_ns <= 200_000_000 and len(expected) > 0
+-               and len(states) == len(expected)
+-               and any(p.ignitionLine or p.ignitionCan for p in states))
+-    configured = None
+-    if healthy:
+-      matches = all(p.safetyModel == c.safetyModel and p.safetyParam == c.safetyParam
+-                    and p.alternativeExperience == self.CP.alternativeExperience
+-                    for p, c in zip(states, expected))
+-      if not matches:
+-        configured = False
+-      elif (getattr(self, "_startup_ready_advertised", False)
+-            and timestamp > self._startup_ready_mono_ns):
+-        configured = True
+-    self.CI.CS.sync_startup_safety(configured, now_nanos)
+-
+   def state_update(self) -> tuple[car.CarState, custom.IQCarState, structs.RadarDataT | None]:
+     """carState update loop, driven by can"""
+ 
+     can_strs = messaging.drain_sock_raw(self.can_sock, wait_for_one=True)
+     can_list = can_capnp_to_list(can_strs)
+ 
+-    # Observe final safety before consuming button samples or publishing state.
+-    # Other vehicles retain their previous SubMaster/CarState ordering.
+-    arming_sync = getattr(self.CI.CS, "requires_startup_arming_sync", lambda: False)()
+-    if arming_sync:
+-      self.sm.update(0)
+-      now_nanos = (messaging.log_from_bytes(can_strs[0]).logMonoTime if REPLAY and can_strs
+-                   else self.can_log_mono_time if REPLAY else time.monotonic_ns())
+-      self._sync_startup_arming(now_nanos)
+-
+     # Update carState from CAN
+     CS, CS_IQ = self.CI.update(can_list)
+     CS_IQ = convert_to_capnp(CS_IQ)
+@@ -262,8 +232,7 @@
+     # Update radar tracks from CAN
+     RD: structs.RadarDataT | None = self.RI.update(can_list)
+ 
+-    if not arming_sync:
+-      self.sm.update(0)
++    self.sm.update(0)
+     self.inject_joystick_buttons(CS)
+ 
+     can_rcv_valid = len(can_strs) > 0
+@@ -383,38 +352,19 @@
+   def controls_update(self, CS: car.CarState, CC: car.CarControl, CC_IQ: custom.IQCarControl):
+     """control update loop, driven by carControl"""
+ 
+-    startup_handoff = (getattr(self.CI.CS, "requires_startup_handoff", lambda: False)())
+-    pending_handoff = startup_handoff and not getattr(self, "_startup_handoff_sent", False)
+-    startup_now_ns = self.can_log_mono_time if REPLAY else time.monotonic_ns()
+-    if pending_handoff and not getattr(self, "_startup_ready_advertised", False) and (not CS.canValid or not self.CI.CS.startup_handoff_ready(startup_now_ns)):
+-      return
+-
+-    needs_init = (not getattr(self, "_startup_interface_initialized", False)
+-                  if startup_handoff else not self.initialized_prev)
+-    if needs_init:
+-      # Finish diagnostics while stock ownership is retained.
++    if not self.initialized_prev:
++      # Initialize CarInterface, once controls are ready
++      # TODO: this can make us miss at least a few cycles when doing an ECU knockout
+       self.CI.init(self.CP, self.CP_IQ, *self.can_callbacks)
+-      if startup_handoff:
+-        self._startup_interface_initialized = True
+-        # Read a fresh CAN batch after any blocking diagnostic initialization.
+-        return
+-      else:
+-        self.params.put_bool_nonblocking("ControlsReady", True)
+-
+-    arming_blocked = not getattr(self.CI.CS, "startup_arming_allowed", lambda: True)()
+-    if pending_handoff or arming_blocked:
+-      # Keep real inactive replacement packets flowing while arming is blocked,
+-      # including stale queued active carControl and the transition update.
+-      # The first producer packet is inactive even if an old control message is queued.
+-      CC = car.CarControl.new_message().as_reader()
+-      CC_IQ = custom.IQCarControl.new_message().as_reader()
++      # signal pandad to switch to car safety mode
++      self.params.put_bool_nonblocking("ControlsReady", True)
+ 
+     stale_frames = max(0, self.sm.frame - self.sm.recv_frame['carControl'])
+     stale_carcontrol_us = int(round(stale_frames * DT_CTRL * 1_000_000))
+     carstate_alive = bool(CS.canValid)
+     fallback_active = False
+ 
+-    if pending_handoff or arming_blocked or self.sm.all_alive(['carControl']):
++    if self.sm.all_alive(['carControl']):
+       # send car controls over can
+       now_nanos = self.can_log_mono_time if REPLAY else int(time.monotonic() * 1e9)
+       started = time.monotonic_ns()
+@@ -427,47 +377,7 @@
+       apply_us = (time.monotonic_ns() - started) // 1000
+ 
+       started = time.monotonic_ns()
+-      sendcan_message = can_list_to_can_capnp(can_sends, msgtype='sendcan', valid=CS.canValid)
+-      if pending_handoff:
+-        # Prepare a real inactive LFA before asking pandad to intercept stock CAN.
+-        lfa = [bytes(dat) for addr, dat, bus in can_sends if addr == 0x12A and bus == self.CI.CC.CAN.ECAN]
+-        if len(lfa) != 1 or len(lfa[0]) != 16:
+-          return
+-        value = int.from_bytes(lfa[0], "little")
+-        if ((value >> 41) & 0x7ff) != 1024 or ((value >> 52) & 1):
+-          return
+-        expected = self.CP.safetyConfigs
+-        states = self.sm['pandaStates']
+-        if not getattr(self, "_startup_ready_advertised", False):
+-          # Applying/serializing for the first time can take long enough for the
+-          # input to expire. Retain stock ownership and retry after fresh input.
+-          startup_now_ns = self.can_log_mono_time if REPLAY else time.monotonic_ns()
+-          if not CS.canValid or not self.CI.CS.startup_handoff_ready(startup_now_ns):
+-            return
+-          health_age_ns = startup_now_ns - self.sm.logMonoTime['pandaStates']
+-          if not (self.sm.all_alive(['pandaStates']) and self.sm.valid['pandaStates']
+-                  and 0 <= health_age_ns <= 200_000_000
+-                  and len(expected) > 0 and len(states) == len(expected)
+-                  and any(p.ignitionLine or p.ignitionCan for p in states)):
+-            return
+-          self._startup_ready_mono_ns = startup_now_ns
+-          self.params.put_bool_nonblocking("ControlsReady", True)
+-          self._startup_ready_advertised = True
+-        # ELM327 still owns the pre-handoff bus. Do not send replacement LFA until
+-        # a fresh health publication confirms the requested vehicle safety mode.
+-        ack_now_ns = self.can_log_mono_time if REPLAY else time.monotonic_ns()
+-        health_age_ns = ack_now_ns - self.sm.logMonoTime['pandaStates']
+-        configured = (self.sm.all_alive(['pandaStates']) and self.sm.valid['pandaStates']
+-                      and 0 <= health_age_ns <= 200_000_000
+-                      and self.sm.logMonoTime['pandaStates'] > self._startup_ready_mono_ns
+-                      and len(expected) > 0 and len(states) == len(expected)
+-                      and any(p.ignitionLine or p.ignitionCan for p in states)
+-                      and all(p.safetyModel == c.safetyModel and p.safetyParam == c.safetyParam
+-                              and p.alternativeExperience == self.CP.alternativeExperience
+-                              for p, c in zip(states, expected)))
+-        if not configured:
+-          return
+-      self.pm.send('sendcan', sendcan_message)
++      self.pm.send('sendcan', can_list_to_can_capnp(can_sends, msgtype='sendcan', valid=CS.canValid))
+       sendcan_us = (time.monotonic_ns() - started) // 1000
+ 
+       self.CC_prev = CC
+@@ -507,9 +417,6 @@
+         self.pm.send('sendcan', can_list_to_can_capnp(can_sends, msgtype='sendcan', valid=CS.canValid))
+         sendcan_us = (time.monotonic_ns() - started) // 1000
+ 
+-    if pending_handoff:
+-      self._startup_handoff_sent = True
+-
+     now_ns = time.monotonic_ns()
+     sendcan_gap_us = 0
+     if sendcan_us > 0:
+--- a/iqpilot/sab/behavior.py
++++ b/iqpilot/sab/behavior.py
+@@ -9,7 +9,7 @@
+ from iqpilot.common.realtime import DT_CTRL
+ from iqdbc.safety import ALTERNATIVE_EXPERIENCE
+ from iqpilot.selfdrive.selfdrived.events import ET
+-from iqdbc.car.hyundai.values import CAR, HyundaiFlags, HyundaiFlagsIQ, HyundaiSafetyFlagsIQ
++from iqdbc.car.hyundai.values import HyundaiFlags, HyundaiFlagsIQ, HyundaiSafetyFlagsIQ
+ from iqpilot.selfdrive.selfdrived.state import SOFT_DISABLE_TIME
+ from iqpilot.cereal import log, custom
+ 
+@@ -495,23 +495,6 @@
+     if held and self._may_silently_resume(cs):
+       self._emit(_Q.alcEngagedSilent)
+ 
+-  def _phase_tucson_native_main_gate(self, cs):
+-    # This platform's CAN-FD safety policy cannot arm lateral from the LFA
+-    # button alone. In the validated AutoEngage=0/button-layout configuration,
+-    # patched CarState requires MAIN or an accepted SET/RES release. Run after
+-    # every app enable path, including
+-    # silent resume, so a new request cannot bypass that prerequisite.
+-    guarded = (getattr(self.CP, 'carFingerprint', None) == CAR.HYUNDAI_TUCSON_4TH_GEN
+-               and self.CP.openpilotLongitudinalControl
+-               and self.CP.flags & HyundaiFlags.CANFD_ALT_BUTTONS)
+-    if guarded and not cs.cruiseState.available:
+-      self._drop(_E.pcmEnable)
+-      self._drop(_E.buttonEnable)
+-      self._retract(_Q.alcEngaged)
+-      self._retract(_Q.alcEngagedSilent)
+-      if self.enabled:
+-        self._emit(_Q.alcDisengaged)
+-
+   def update_events(self, cs):
+     self._phase_joystick(cs)
+     self._phase_soften_for_lateral_session(cs)
+@@ -526,7 +509,6 @@
+ 
+     if kill_all:
+       self._raise(_E.buttonCancel)
+-    self._phase_tucson_native_main_gate(cs)
+ 
+   def update(self, cs):
+     if not self.enabled_toggle and not self.params.get_bool("JoystickDebugMode"):
+--- a/artifacts/package_sources/iqdbc/iqdbc/car/hyundai/carstate.py
++++ b/artifacts/package_sources/iqdbc/iqdbc/car/hyundai/carstate.py
+@@ -5,7 +5,6 @@
+ import ast
+ 
+ from iqdbc.can import CANDefine, CANParser
+-from iqdbc.can.parser import MAX_BAD_COUNTER
+ from iqdbc.car import Bus, create_button_events, structs, DT_CTRL
+ from iqdbc.car.common.conversions import Conversions as CV
+ from iqdbc.car.hyundai.hyundaicanfd import CanBus
+@@ -51,41 +50,6 @@
+   return active, valid
+ 
+ 
+-def _tucson_enable_inputs_valid(cp):
+-  # CANParser.can_valid advances its invalid streak on every read. Do not read
+-  # it here in addition to CarInterface.update. New authorization requires
+-  # currently healthy parsed inputs without altering the global grace counter.
+-  bus_timeout = cp.bus_timeout
+-  return (not bus_timeout and bool(cp.message_states)
+-          and all(state.counter_fail < MAX_BAD_COUNTER
+-                  and state.valid(cp._last_update_nanos, bus_timeout)
+-                  for state in cp.message_states.values()))
+-
+-
+-def _tucson_long_enable_release(previous_button, button_samples, brake_pressed,
+-                                 previous_brake_pressed, brake_samples, can_valid):
+-  """Accept a new SET/RES request only on a fresh, brake-clear release.
+-
+-  A denied release is consumed. Brake release alone must not replay it later.
+-  Batch ordering between TCS and buttons is unavailable here: any pressed brake
+-  sample, or a pressed brake in the preceding update, makes this release unsafe
+-  to infer. Existing main/AOL state is deliberately outside this helper.
+-  """
+-  if not can_valid:
+-    # Invalid input cannot seed an enable request for a later healthy release.
+-    return False, Buttons.NONE
+-  brake_clear = (can_valid and not brake_pressed and not previous_brake_pressed
+-                 and not any(bool(value) for value in brake_samples))
+-  enable = False
+-  for button in button_samples:
+-    if (previous_button in (Buttons.RES_ACCEL, Buttons.SET_DECEL)
+-        and button == Buttons.NONE and brake_clear):
+-      enable = True
+-    # Do not manufacture a release from held parser values or LFA button events.
+-    previous_button = button
+-  return enable, previous_button
+-
+-
+ NUMERIC_TO_TZ = {
+     840: "America/New_York",   # 미국 (US) → 동부 시간대
+     124: "America/Toronto",    # 캐나다 (CA) → 동부 시간대
+@@ -177,18 +141,6 @@
+     self.op_params = Params()
+ 
+     self.main_enabled = True if self.op_params.get_int("AutoEngage") == 2 else False
+-    self._tucson_enable_button_prev = Buttons.NONE
+-    self._tucson_enable_brake_prev = True
+-    self._tucson_main_off_latched = False
+-    self._tucson_safety_configured = False
+-    self._tucson_safety_fresh = False
+-    self._tucson_arm_boundary_ns = 0
+-    self._tucson_arm_pending = True
+-    self._tucson_arm_neutral_seen = False
+-    self._tucson_arm_button_prev = Buttons.NONE
+-    self._tucson_arm_last_button_ns = 0
+-    self._tucson_arm_now_ns = 0
+-    self._tucson_arm_auto_mode = self.op_params.get_int("AutoEngage")
+     self.gear_shifter = GearShifter.drive # Gear_init for Nexo ?? unknown 21.02.23.LSW
+ 
+     self.totalDistance = 0.0
+@@ -244,162 +196,6 @@
+     self.trailer_connected_prev = False
+     self.trailer_status = None
+ 
+-  def requires_startup_handoff(self):
+-    return (self.CP.carFingerprint == CAR.HYUNDAI_TUCSON_4TH_GEN
+-            and self.CP.flags & HyundaiFlags.CANFD
+-            and self.CP.flags & HyundaiFlags.CANFD_CAMERA_SCC
+-            and not self.CP.flags & HyundaiFlags.CANFD_HDA2
+-            and self.CP.openpilotLongitudinalControl
+-            and self.CP.steerControlType == structs.CarParams.SteerControlType.torque)
+-
+-  def requires_startup_arming_sync(self):
+-    # The validated manual-engagement Tucson profile only. The first MAIN state
+-    # after native initialization is not reported by panda health telemetry.
+-    return (self.requires_startup_handoff()
+-            and self.CP.flags & HyundaiFlags.CANFD_ALT_BUTTONS
+-            and self.cruise_buttons_alt2 is None
+-            and self._tucson_arm_auto_mode == 0)
+-
+-  def sync_startup_safety(self, configured, now_nanos):
+-    """A fresh final-mode observation begins an engagement epoch.
+-
+-    None means no trustworthy new health observation. It cannot establish an
+-    epoch or authorize a new request, but does not itself erase already armed
+-    operation. A fresh observed mode/experience mismatch invalidates the epoch.
+-    """
+-    if not self.requires_startup_arming_sync():
+-      return
+-    self._tucson_arm_now_ns = now_nanos
+-    self._tucson_safety_fresh = configured is True
+-    if configured is False or (configured is True and not self._tucson_safety_configured):
+-      self._tucson_safety_configured = configured is True
+-      self._tucson_arm_boundary_ns = now_nanos
+-      self._tucson_arm_last_button_ns = now_nanos
+-      self._tucson_arm_pending = True
+-      self._tucson_arm_neutral_seen = False
+-      self._tucson_arm_button_prev = Buttons.NONE
+-      self._tucson_enable_button_prev = Buttons.NONE
+-      self._tucson_enable_brake_prev = True
+-      self._tucson_main_off_latched = False
+-      self.main_enabled = False
+-
+-  def startup_arming_allowed(self):
+-    return (not self.requires_startup_arming_sync()
+-            or (self._tucson_safety_configured and not self._tucson_arm_pending))
+-
+-  def _update_startup_arming(self, cp, ret):
+-    if not self.requires_startup_arming_sync():
+-      return
+-    values = cp.vl_all[self.cruise_btns_msg_canfd]
+-    buttons = values["CRUISE_BUTTONS"]
+-    adaptive = values["ADAPTIVE_CRUISE_MAIN_BTN"]
+-    normal = values["NORMAL_CRUISE_MAIN_BTN"]
+-    lfa = values["LFA_BTN"]
+-    # MAIN is a toggle of native state, not an explicit enable request. Its
+-    # parity is unobservable across initialization. MAIN may stop assistance;
+-    # any restart then requires a fresh SET/RES release, including later toggles.
+-    main_activity = (any(adaptive) or any(normal)
+-                     or bool(cp.vl[self.cruise_btns_msg_canfd]["ADAPTIVE_CRUISE_MAIN_BTN"])
+-                     or bool(cp.vl[self.cruise_btns_msg_canfd]["NORMAL_CRUISE_MAIN_BTN"]))
+-    if main_activity:
+-      self._tucson_arm_pending = True
+-      self._tucson_arm_neutral_seen = False
+-      self._tucson_arm_button_prev = Buttons.NONE
+-    if not self._tucson_arm_pending:
+-      return
+-    valid = (self._tucson_safety_configured and self._tucson_safety_fresh
+-             and self.controls_ready_count >= READY_COUNT_OK
+-             and _tucson_enable_inputs_valid(cp)
+-             and self._startup_message_fresh(cp, self.cruise_btns_msg_canfd, 100_000_000, self._tucson_arm_now_ns)
+-             and self._startup_message_fresh(cp, "TCS", 100_000_000, self._tucson_arm_now_ns))
+-    count = len(buttons)
+-    message = cp.dbc.name_to_msg[self.cruise_btns_msg_canfd]
+-    state = cp.message_states.get(message.address)
+-    times = list(state.timestamps)[-count:] if state is not None and count else []
+-    fresh = (count and count == len(adaptive) == len(normal) == len(lfa) == len(times)
+-             and min(times) > max(self._tucson_arm_boundary_ns, self._tucson_arm_last_button_ns)
+-             and max(times) <= cp._last_update_nanos
+-             and 0 <= self._tucson_arm_now_ns - min(times) <= 100_000_000
+-             and max(times) <= self._tucson_arm_now_ns
+-             and all(a <= b for a, b in zip(times, times[1:])))
+-    if not valid or main_activity:
+-      self._tucson_arm_neutral_seen = False
+-      self._tucson_arm_button_prev = Buttons.NONE
+-      return
+-    if not count:
+-      return
+-    if not fresh or any(lfa) or any(button not in (Buttons.NONE, Buttons.SET_DECEL, Buttons.RES_ACCEL) for button in buttons):
+-      self._tucson_arm_neutral_seen = False
+-      self._tucson_arm_button_prev = Buttons.NONE
+-      return
+-    self._tucson_arm_last_button_ns = times[-1]
+-    if not self._tucson_arm_neutral_seen:
+-      # A whole fresh neutral publication is required. A held button or a batch
+-      # crossing the boundary cannot donate an old press to a later release.
+-      self._tucson_arm_neutral_seen = all(button == Buttons.NONE for button in buttons)
+-      self._tucson_arm_button_prev = Buttons.NONE
+-      return
+-    enable, self._tucson_arm_button_prev = _tucson_long_enable_release(
+-      self._tucson_arm_button_prev, buttons, ret.brakePressed,
+-      self._tucson_enable_brake_prev, cp.vl_all["TCS"]["DriverBraking"], valid)
+-    if enable and buttons[-1] == Buttons.NONE:
+-      self._tucson_arm_pending = False
+-      self.main_enabled = True
+-      self._tucson_main_off_latched = False
+-
+-  def _startup_messages(self):
+-    # Required streams that the camera-SCC controller replaces at handoff.
+-    return ((self.cp_cam, "LFA", "lfa", 50_000_000),
+-            (self.cp, "MDPS", "mdps", 50_000_000),
+-            (self.cp_cam, "LFAHDA_CLUSTER", "lfahda_cluster", 200_000_000),
+-            (self.cp_cam, "SCC_CONTROL", "scc_control", 100_000_000))
+-
+-  @staticmethod
+-  def _startup_message_fresh(parser, name, max_age_ns, now_nanos=None):
+-    if parser is None:
+-      return False
+-    msg = parser.dbc.name_to_msg.get(name)
+-    if msg is None or msg.address not in parser.message_states:
+-      return False
+-    state = parser.message_states[msg.address]
+-    if not state.timestamps or state.counter_fail != 0:
+-      return False
+-    # Empty parser updates do not advance its clock. The final card readiness
+-    # check supplies current monotonic time, so silence cannot preserve freshness.
+-    age_ns = (parser._last_update_nanos if now_nanos is None else now_nanos) - state.timestamps[-1]
+-    return (0 <= age_ns <= max_age_ns
+-            and len(parser.dat.get(name, b"")) == msg.size)
+-
+-  def startup_handoff_ready(self, now_nanos=None):
+-    if not self.requires_startup_handoff():
+-      return True
+-    return all(self._startup_message_fresh(parser, name, max_age_ns, now_nanos)
+-               and getattr(self, attr) is not None
+-               for parser, name, attr, max_age_ns in self._startup_messages())
+-
+-  def _prepare_startup_messages(self):
+-    # Register independently of ControlsReady: waiting for count121 after that
+-    # marker leaves native LFA blocked while replacement generation has no LFA.
+-    required = self._startup_messages()
+-    optional = ((self.cp, "TCS", "tcs", 100_000_000),
+-                (self.cp, "STEER_TOUCH_2AF", "steer_touch_2af", 300_000_000),
+-                (self.cp_cam, "ADRV_0x161", "adrv_0x161", 300_000_000),
+-                (self.cp_cam, "ADRV_0x200", "adrv_0x200", 300_000_000),
+-                (self.cp_cam, "ADRV_0x1ea", "adrv_0x1ea", 300_000_000),
+-                (self.cp_cam, "ADRV_0x160", "adrv_0x160", 300_000_000),
+-                (self.cp_cam, "CCNC_0x162", "ccnc_0x162", 300_000_000))
+-    for parser, name, attr, max_age_ns in (*required, *optional):
+-      if parser is None:
+-        continue
+-      msg = parser.dbc.name_to_msg.get(name)
+-      if msg is None or msg.address not in parser.seen_addresses:
+-        continue
+-      if msg.address not in parser.addresses:
+-        parser._add_message(name)
+-      # _add_message creates zero dictionaries; do not cache those as valid CAN.
+-      if self._startup_message_fresh(parser, name, max_age_ns):
+-        setattr(self, attr, parser.vl[name])
+-
+   def monitor_fingerprint(self, can_parsers, canfd):
+     if self.controls_ready_count <= READY_COUNT_OK:
+       if Params().get_bool("ControlsReady"):
+@@ -409,9 +205,6 @@
+       self.cp_cam = can_parsers[Bus.cam]
+       self.cp_alt = can_parsers[Bus.alt] if Bus.alt in can_parsers else None
+ 
+-      if self.requires_startup_handoff():
+-        self._prepare_startup_messages()
+-
+       def add_if_seen(parser, name, ignore_counter = False):
+         msg = parser.dbc.name_to_msg.get(name)
+         if not msg:
+@@ -833,55 +626,15 @@
+         ret.leftBlindspot = (bsm_info["FL_INDICATOR"] + bsm_info["INDICATOR_LEFT_TWO"] + bsm_info["INDICATOR_LEFT_FOUR"]) > 0
+         ret.rightBlindspot = (bsm_info["FR_INDICATOR"] + bsm_info["INDICATOR_RIGHT_TWO"] + bsm_info["INDICATOR_RIGHT_FOUR"]) > 0
+ 
+-    # Establish fresh engagement only after the final native safety boundary.
+-    self._update_startup_arming(cp, ret)
+-
+     # cruise state
+     if self.cruise_buttons_alt2 is not None:
+       cruise_button = self.cruise_buttons_alt2["CRUISE_BUTTONS"]
+     else:
+       cruise_button = cp.vl[self.cruise_btns_msg_canfd]["CRUISE_BUTTONS"]
+-    # Application-side draft: preserve native safety and wait for the same
+-    # SET/RES release condition before newly advertising this Tucson as ready.
+-    tucson_release_gate = (self.CP.carFingerprint == CAR.HYUNDAI_TUCSON_4TH_GEN
+-                           and self.CP.openpilotLongitudinalControl
+-                           and bool(self.CP.flags & HyundaiFlags.CANFD_ALT_BUTTONS)
+-                           and self.cruise_buttons_alt2 is None)
+-    if tucson_release_gate:
+-      enable_inputs_valid = _tucson_enable_inputs_valid(cp)
+-      enable, self._tucson_enable_button_prev = _tucson_long_enable_release(
+-        self._tucson_enable_button_prev,
+-        cp.vl_all[self.cruise_btns_msg_canfd]["CRUISE_BUTTONS"],
+-        ret.brakePressed, self._tucson_enable_brake_prev,
+-        cp.vl_all["TCS"]["DriverBraking"], enable_inputs_valid,
+-      )
+-      self._tucson_enable_brake_prev = ret.brakePressed or not enable_inputs_valid
+-      main_samples = [bool(adaptive or normal) for adaptive, normal in zip(
+-        cp.vl_all[self.cruise_btns_msg_canfd]["ADAPTIVE_CRUISE_MAIN_BTN"],
+-        cp.vl_all[self.cruise_btns_msg_canfd]["NORMAL_CRUISE_MAIN_BTN"], strict=True)]
+-      # The existing native MAIN release toggle runs below. Preserve its
+-      # precedence if MAIN and SET/RES release arrive in the same parser batch.
+-      main_release_pending = bool(self.main_buttons[-1]) and bool(main_samples) and not main_samples[-1]
+-      # Native safety turns an armed MAIN off on press, while the legacy app
+-      # toggles its internal state on release below. Stop advertising ready
+-      # immediately and retain the stop through held/no-message updates and
+-      # release. A fully coalesced press/release can evade that legacy toggle;
+-      # keep it stopped until a new, unambiguous SET/RES release re-arms it.
+-      if not self.main_enabled:
+-        self._tucson_main_off_latched = False
+-      if self.main_enabled and (bool(self.main_buttons[-1]) or any(main_samples)):
+-        self._tucson_main_off_latched = True
+-      main_quiet = not bool(self.main_buttons[-1]) and not any(main_samples)
+-      if enable and not main_release_pending:
+-        self.main_enabled = True
+-        if main_quiet:
+-          self._tucson_main_off_latched = False
+-    elif cruise_button in [Buttons.RES_ACCEL, Buttons.SET_DECEL] and self.CP.openpilotLongitudinalControl:
++    if cruise_button in [Buttons.RES_ACCEL, Buttons.SET_DECEL] and self.CP.openpilotLongitudinalControl:
+       self.main_enabled = True
+     # CAN FD cars enable on main button press, set available if no TCS faults preventing engagement
+     ret.cruiseState.available = self.main_enabled and self.controls_ready_count >= READY_COUNT_OK #cp.vl["TCS"]["ACCEnable"] == 0
+-    if tucson_release_gate and self._tucson_main_off_latched:
+-      ret.cruiseState.available = False
+     self.canfdSccHoldActive = cp.vl["ESP_STATUS"]["AUTO_HOLD"] == 1
+     if self.CP.flags & HyundaiFlags.CAMERA_SCC.value:
+       self.MainMode_ACC = cp_cam.vl["SCC_CONTROL"]["MainMode_ACC"] == 1
+@@ -892,9 +645,7 @@
+       # These are not used for engage/disengage since openpilot keeps track of state using the buttons
+       ret.cruiseState.enabled = cp.vl["TCS"]["ACC_REQ"] == 1
+       ret.cruiseState.standstill = False
+-      # Camera main-mode feedback is not an enable edge in this Tucson's
+-      # longitudinal safety path. Preserve existing native MAIN button logic.
+-      if self.main_enabled or (self.MainMode_ACC and not tucson_release_gate):
++      if self.MainMode_ACC or self.main_enabled:
+         self.main_enabled = True
+     else:
+       cp_cruise_info = cp_cam if self.CP.flags & HyundaiFlags.CANFD_CAMERA_SCC else cp
+@@ -1055,11 +806,6 @@
+ 
+     self.paddle_button_prev = paddle_button
+ 
+-    if not self.startup_arming_allowed():
+-      # Mask both the returned state and legacy stored intent after all button
+-      # handlers; later readiness ticks cannot resurrect a pre-boundary action.
+-      ret.cruiseState.available = False
+-      self.main_enabled = False
+     return ret
+ 
+   def get_can_parsers_canfd(self, CP, CP_IQ=None):
