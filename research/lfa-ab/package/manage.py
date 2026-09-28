@@ -89,7 +89,10 @@ def supported_configuration(p, manifest, installed=False):
     for key, expected in manifest['required_params'].items():
         value = p.get_bool(key) if isinstance(expected, bool) else p.get(key, return_default=True)
         require(value == expected, f'Unsupported setting: {key}={value!r}, expected {expected!r}')
+    targets = {ent['path'] for ent in manifest['files']}
     for rel, expected_hash in manifest.get('validation_dependencies', {}).items():
+        if installed and rel in targets:
+            continue
         require(digest(ROOT / rel) == expected_hash, f'Validated dependency changed: {rel}')
     require(not Path('/data/safe_staging/finalized/.overlay_consistent').exists(), 'An IQ update is staged; install and revalidate that version first')
     import importlib.util

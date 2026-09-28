@@ -55,3 +55,8 @@ baseline ≈ 10–15 events per 5 min; a variant that drops to 0 is a hit, ≤3 
 ## Not done / not claimed
 Nothing installed. No variant has physical evidence yet. Semantics of LKA_MODE,
 HAS_LANE_SAFETY, NEW_SIGNAL_1, DampingGain remain inferred from the stock camera's values.
+
+## Install log
+- 2026-09-28 23:26Z: package installed on the comma (parked, IsOffroad=1), variant file absent
+  (= variant 0), parked reboot, `--verify-installed` passed. manage.py fix: post-install verify
+  skipped the target file in `validation_dependencies` (it previously required the original hash).
