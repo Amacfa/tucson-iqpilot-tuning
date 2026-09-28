@@ -1,0 +1,127 @@
+--- hyundaicanfd.orig.py	2026-09-28 23:00:17.442065758 +0000
++++ hyundaicanfd.py	2026-09-28 23:00:50.496169611 +0000
+@@ -20,6 +20,28 @@
+ HANDS_ON_SPOOF_FRAMES = 40
+ HANDS_ON_SPOOF_TORQUE = 220
+ 
++# Stationary A/B switch for the camera-side "Check LFA System" warning.
++# Bit-mask read once from a plain file so no Params key registration is needed.
++#   1: LFA (0x12a) built from the camera's own frame; only the control fields are overridden
++#   2: MDPS (0xea) relayed to the camera unmodified (no LKA_ACTIVE rewrite, no hands-on spoof)
++#   4: LFAHDA_CLUSTER (0x1e0) passed through unless IQ is actively controlling
++#   8: DampingGain kept at the camera's value (100) while IQ steers
++# Missing/invalid file -> 0 -> behavior identical to the unpatched release.
++LFA_AB_FILE = "/data/tucson_lfa_ab"
++_lfa_ab = None
++
++
++def lfa_ab_variant():
++  global _lfa_ab
++  if _lfa_ab is None:
++    try:
++      with open(LFA_AB_FILE) as f:
++        _lfa_ab = int(f.read().strip() or "0") & 0xF
++    except (OSError, ValueError):
++      _lfa_ab = 0
++    carlog.warning(f"tucson LFA A/B variant = {_lfa_ab}")
++  return _lfa_ab
++
+ 
+ def hyundai_crc8(data: bytes) -> int:
+   poly = 0x2F
+@@ -153,26 +175,28 @@
+   if CS.adrv_0x161 is not None:
+     emergency_steering = CS.adrv_0x161["ALERTS_1"] in EMERGENCY_STEERING_ALERTS
+ 
++  ab = lfa_ab_variant()
+   ret = []
+   # The camera keeps running its own LFA/SCC logic behind the relay and faults unless the
+   # actuator feedback it sees follows its own request, so MDPS is re-sent to the camera bus.
+   if CS.mdps is not None:
+     values = copy.copy(CS.mdps)
+-    if angle_control:
+-      if CS.lfa_alt is not None:
+-        values["LFA2_ACTIVE"] = CS.lfa_alt["LKAS_ANGLE_ACTIVE"]
+-    else:
+-      if CS.lfa is not None:
+-        values["LKA_ACTIVE"] = 1 if CS.lfa["STEER_REQ"] == 1 else 0
++    if not (ab & 2):
++      if angle_control:
++        if CS.lfa_alt is not None:
++          values["LFA2_ACTIVE"] = CS.lfa_alt["LKAS_ANGLE_ACTIVE"]
++      else:
++        if CS.lfa is not None:
++          values["LKA_ACTIVE"] = 1 if CS.lfa["STEER_REQ"] == 1 else 0
+ 
+-    if frame % HANDS_ON_SPOOF_PERIOD < HANDS_ON_SPOOF_FRAMES:
+-      values["STEERING_COL_TORQUE"] += HANDS_ON_SPOOF_TORQUE
++      if frame % HANDS_ON_SPOOF_PERIOD < HANDS_ON_SPOOF_FRAMES:
++        values["STEERING_COL_TORQUE"] += HANDS_ON_SPOOF_TORQUE
+     ret.append(packer.make_can_msg("MDPS", CAN.CAM, values))
+ 
+   if frame % 10 == 0:
+     if CS.steer_touch_2af is not None:
+       values = copy.copy(CS.steer_touch_2af)
+-      if frame % HANDS_ON_SPOOF_PERIOD < HANDS_ON_SPOOF_FRAMES:
++      if frame % HANDS_ON_SPOOF_PERIOD < HANDS_ON_SPOOF_FRAMES and not (ab & 2):
+         values["TOUCH_DETECT"] = 3
+         values["TOUCH1"] = 50
+         values["TOUCH2"] = 50
+@@ -211,17 +235,29 @@
+       ret.append(packer.make_can_msg("LFA", CAN.ECAN, values, rx_counter=rx_counter))
+ 
+   elif CS.lfa is not None:
+-    values = {
+-      "LKA_MODE": 2,
+-      "LKA_ICON": 2 if lat_active else 1,
+-      "TORQUE_REQUEST": apply_steer,
+-      "STEER_REQ": 1 if lat_active else 0,
+-      "VALUE64": 0,
+-      "HAS_LANE_SAFETY": 0,
+-      "LKA_ACTIVE": 0,
+-      "DampingGain": 0 if lat_active else 100,
+-    }
+-    ret.append(packer.make_can_msg("LFA", CAN.ECAN, values))
++    damping = 100 if (ab & 8) else (0 if lat_active else 100)
++    if ab & 1:
++      values = copy.copy(CS.lfa)
++      rx_counter = values.pop("COUNTER", None)
++      values.update({
++        "LKA_ICON": 2 if lat_active else 1,
++        "TORQUE_REQUEST": apply_steer,
++        "STEER_REQ": 1 if lat_active else 0,
++        "DampingGain": damping,
++      })
++      ret.append(packer.make_can_msg("LFA", CAN.ECAN, values, rx_counter=rx_counter))
++    else:
++      values = {
++        "LKA_MODE": 2,
++        "LKA_ICON": 2 if lat_active else 1,
++        "TORQUE_REQUEST": apply_steer,
++        "STEER_REQ": 1 if lat_active else 0,
++        "VALUE64": 0,
++        "HAS_LANE_SAFETY": 0,
++        "LKA_ACTIVE": 0,
++        "DampingGain": damping,
++      }
++      ret.append(packer.make_can_msg("LFA", CAN.ECAN, values))
+ 
+   return ret
+ 
+@@ -346,8 +382,14 @@
+     rx_counter = None
+     values["LFA_OptUsmSta"] = 2
+     values["HDA_OptUsmSta"] = 2
+-  values["HDA_CntrlModSta"] = 2 if long_active else 0
+-  values["HDA_LFA_SymSta"] = 2 if lat_active else 0
++  if lfa_ab_variant() & 4:
++    if long_active:
++      values["HDA_CntrlModSta"] = 2
++    if lat_active:
++      values["HDA_LFA_SymSta"] = 2
++  else:
++    values["HDA_CntrlModSta"] = 2 if long_active else 0
++    values["HDA_LFA_SymSta"] = 2 if lat_active else 0
+   return [packer.make_can_msg("LFAHDA_CLUSTER", CAN.ECAN, values, rx_counter=rx_counter)]
+ 
+ def create_lfa_icon_non_camera_scc(packer, CS, CAN, CC):
