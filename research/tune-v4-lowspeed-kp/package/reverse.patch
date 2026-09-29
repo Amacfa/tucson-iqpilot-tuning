@@ -1,0 +1,20 @@
+--- a/iqpilot/selfdrive/controls/lib/latcontrol_torque.py
++++ b/iqpilot/selfdrive/controls/lib/latcontrol_torque.py
+@@ -516,7 +516,7 @@
+     p_gains = [gain * 0.8 for gain in KP_INTERP] if self.hkg_reduced_torque_feedback else KP_INTERP
+     self.friction_scale = 0.7 if self.hkg_reduced_torque_feedback else 1.0
+     self.pid = PIDController([INTERP_SPEEDS, p_gains], KI, rate=1/self.dt)
+-    # H1+v4: base speed-scheduled P table; kp_scale 0.7 below 13 m/s blending to 0.6 at 17 m/s.
++    # H1: base speed-scheduled P table; scaled down above ~15 m/s in update().
+     self._kp_base = [self.pid._k_p[0], list(self.pid._k_p[1])]
+     # H1: 0.3 s first-order LP state for the friction-compensation error input.
+     self._fric_err_lp = 0.0
+@@ -590,7 +590,7 @@
+       pid_log.error = float(error)
+ 
+       freeze_integrator = steer_limited_by_safety or CS.steeringPressed or CS.vEgo < 5
+-      kp_scale = float(np.interp(CS.vEgo, [13.0, 17.0], [0.7, 0.6]))
++      kp_scale = float(np.interp(CS.vEgo, [13.0, 17.0], [1.0, 0.6]))
+       self.pid._k_p = [self._kp_base[0], [k * kp_scale for k in self._kp_base[1]]]
+       output_lataccel = self.pid.update(pid_log.error, speed=CS.vEgo, feedforward=ff, freeze_integrator=freeze_integrator)
+       output_torque = self.torque_from_lateral_accel(output_lataccel, self.torque_params)
