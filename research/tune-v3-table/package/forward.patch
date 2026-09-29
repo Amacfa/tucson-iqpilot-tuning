@@ -1,0 +1,13 @@
+diff --git a/iqpilot/selfdrive/controls/lib/latcontrol_torque.py b/iqpilot/selfdrive/controls/lib/latcontrol_torque.py
+index 9f29863..25ca766 100644
+--- a/iqpilot/selfdrive/controls/lib/latcontrol_torque.py
++++ b/iqpilot/selfdrive/controls/lib/latcontrol_torque.py
+@@ -499,7 +499,7 @@ VERSION = 1
+ 
+ # Per-platform speed-scheduled latAccelFactor (m/s^2 per unit torque), replacing the static value.
+ LAT_ACCEL_FACTOR_SPEED_TABLE = {
+-  "HYUNDAI_TUCSON_4TH_GEN": ([8.0, 15.0, 25.0], [2.95, 3.35, 3.70]),
++  "HYUNDAI_TUCSON_4TH_GEN": ([8.0, 12.0, 15.0, 25.0], [2.95, 3.20, 3.80, 3.90]),
+ }
+ class LatControlTorque(LatControl):
+   supports_legacy_curvature_lookahead = True
