@@ -3,7 +3,7 @@
  "candidate/iqpilot/selfdrive/controls/lib/latcontrol_torque.py": "9979c41be062c083421347b4153ec7c046cd10a8cecb6424613dc3d4305ea1d5",
  "forward.patch": "230d73e3d601e093473d321adf2a8b69bc5ae11e624f108a4adc8062167f6a78",
  "manage.py": "1f1ee800d83362472f9de0a868a36e528bec9da691e9542a7cc9c32ccd0ea3a6",
- "manifest.json": "a6f956d8dc14361d5e5d77b856a165b0b65f60279de4aaa1f9ce24f329058761",
+ "manifest.json": "b87a39fa99ee7c31309341674e650c4f8264ae98c3bbff171e10de88d8a85c42",
  "reverse.patch": "c5a1430ba76e9571103e2d714eac8b5f855a0bc226d256b4f46d9e294cef76b2",
  "rollback/iqpilot/selfdrive/controls/lib/latcontrol_torque.py": "97cc8ee48772633dd9dcf470165a8259c4ebb7e89a04ed5c17652f5aa48990dd",
  "test_artifacts.py": "4436811fc4d185f61b431300c4768214fffd0893532ca1ca1512bc7fef6212fb",

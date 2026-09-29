@@ -36,6 +36,7 @@ MANIFESTS = [
 CANDIDATE_ONLY = [  # report presence only (L1c/C1 never installed; v3/H1/D1 installed 2026-09-29)
     ('tune-v3', f'{HOME}/analysis/tucson-tune-3736edc-v3/package/manifest.json'),
     ('H1', f'{HOME}/analysis/tucson-tune-3736edc-H1/package/manifest.json'),
+    ('tune-v4', f'{HOME}/analysis/tucson-tune-3736edc-v4/package/manifest.json'),
     ('D1', f'{HOME}/analysis/tucson-tune-3736edc-D1/package/manifest.json'),
     ('L1c', f'{HOME}/analysis/tucson-long-3736edc-L1c/package/manifest.json'),
     ('C1', f'{HOME}/analysis/tucson-setspeed-3736edc-C1/package/manifest.json'),
