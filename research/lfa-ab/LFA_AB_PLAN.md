@@ -60,3 +60,20 @@ HAS_LANE_SAFETY, NEW_SIGNAL_1, DampingGain remain inferred from the stock camera
 - 2026-09-28 23:26Z: package installed on the comma (parked, IsOffroad=1), variant file absent
   (= variant 0), parked reboot, `--verify-installed` passed. manage.py fix: post-install verify
   skipped the target file in `validation_dependencies` (it previously required the original hash).
+
+## Offline addendum (no car time)
+- `UPSTREAM_COMPARE.md`: the whole camera-SCC steering path (MDPS relay + hands-on spoof,
+  STEER_TOUCH spoof, cluster rewrite, synthesized LFA) is fork-only; upstream openpilot has no
+  camera-SCC Tucson baseline, so "upstream doesn't show this" cannot be checked. Upstream's LFA
+  frame differs from IQ's only in DampingGain (100 always). Community precedents: a
+  comma-sent LFA frame can latch a "Check LFA" state (commaai/openpilot#29552); Hyundai ties the
+  same warning text to MDPS communication-fault detection (NHTSA RCONL-21V447) → bit 2 (MDPS
+  relay) and bit 1 (LFA content) stay the top two candidates.
+- `mdps_relay_diff.py`: IQ's relayed MDPS is not a byte copy; while IQ steers, byte 6
+  (LKA_ACTIVE) is 0x01 from the MDPS and 0x00 in IQ's copy (by design: follows the camera's
+  STEER_REQ). Torque bytes could not be matched frame-for-frame (exports are subsampled), so
+  no further offline conclusion. Also noted: IQ's DBC decodes bits 48/54 as 1-bit fields where
+  upstream decodes 2-bit `MDPS_LkaToiActvSta`/`MDPS_LkaFailSta`; bit 49 is re-encoded as 0.
+- The A/B does not need the driver to do anything special: setting a variant before a normal
+  drive and counting LKA_MODE=7 events in the log is the test. Not started — needs Alex's OK
+  to change steering-message content during a real drive.

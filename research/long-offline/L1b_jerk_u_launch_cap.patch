@@ -1,0 +1,14 @@
+--- /tmp/cc_l1.py	2026-09-29 00:13:42.089470069 +0000
++++ /tmp/cc_l1b.py	2026-09-29 00:13:42.099470072 +0000
+@@ -800,8 +800,9 @@
+         # Same treatment for acceleration authority: a floor plus a raw-request boost, so positive
+         # requests are not held to the 0.5 m/s^3 ramp once the MPC jerk settles.
+         jerk_u_base = 1.0
+-        jerk_u_raw = np.clip(jerk_u_base + 2.0 * max(0.0, accel - 1.0), jerk_u_base, jerk_max_u)
+-        jerk_u_mpc = np.clip(self.jerk * 2.0, jerk_u_base, jerk_max_u)
++        jerk_u_cap = float(np.interp(CS.out.vEgo, [3.0, 8.0], [1.5, jerk_max_u]))
++        jerk_u_raw = np.clip(jerk_u_base + 1.0 * max(0.0, accel - 1.0), jerk_u_base, jerk_u_cap)
++        jerk_u_mpc = np.clip(self.jerk * 2.0, jerk_u_base, jerk_u_cap)
+ 
+         self.jerk_u = max(jerk_u_raw, jerk_u_mpc)
+         self.jerk_l = max(jerk_l_raw, jerk_l_mpc)
