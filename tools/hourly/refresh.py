@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Hourly research refresh: pull new drive segments from the comma, rebuild the
-frame dataset, produce a pre/post-install A/B report, publish to github-record
-and the Mac snapshot. Idempotent; read-only w.r.t. the device (writes only to
-/data/tucson_stage and /data/tucson-drive-export, as before).
+"""Hourly research refresh (v3b pipeline): pull new drive segments from the comma
+with export_drive_summary_v3.py, run the long3b attribution + steering closeout,
+produce a report, publish to github-record and the Mac snapshot. Idempotent;
+read-only w.r.t. the device (writes only to /data/tucson_stage and
+/data/tucson-drive-export-v3b).
 
 stdout emits one compact JSON summary line.
 """
@@ -16,28 +17,40 @@ import datetime
 
 HOME = '/home/ubuntu/tucson'
 HOURLY = f'{HOME}/hourly'
-STATE = f'{HOURLY}/state/segments.json'
-EXPORT_DIR = f'{HOME}/drives/export'
-FRAMES = f'{HOME}/drives/all_frames.npy'
-COLS = f'{HOME}/drives/all_frames_cols.json'
+STATE = f'{HOURLY}/state/segments_v3.json'
+EXPORT_DIR = f'{HOME}/drives/export-v3b'
 REPORTS = f'{HOURLY}/reports'
 GH = f'{HOME}/github-record'
-DEVICE_EXPORTER_LOCAL = f'{HOME}/drives/export_drive_summary_v2.py'
-DEVICE_EXPORTER = '/data/tucson_stage/export_drive_summary_v2.py'
-DEVICE_OUT = '/data/tucson-drive-export-v2'
+DEVICE_EXPORTER_LOCAL = f'{HOME}/drives/export_drive_summary_v3.py'
+DEVICE_EXPORTER = '/data/tucson_stage/export_drive_summary_v3.py'
+DEVICE_OUT = '/data/tucson-drive-export-v3b'
 DEVICE_BASE = '/data/media/0/realdata'
 VENV = '/data/openpilot/.venv/bin/python'
 PPATH = '/data/openpilot/.venv/lib/python3.12/site-packages:/data/openpilot'
-ARMING_MANIFEST = f'{HOME}/analysis/tucson-warning-arming-457ea8e/package/manifest.json'
-TUNE_MANIFEST = f'{HOME}/analysis/tucson-tune-457ea8e/package/manifest.json'
-INSTALL_UTC = datetime.datetime(2026, 9, 24, 7, 40, 0, tzinfo=datetime.timezone.utc).timestamp()
+# manifests used for the installed-state check: (label, manifest, origin)
+MANIFESTS = [
+    ('tune-v2', f'{HOME}/analysis/tucson-tune-3736edc-v2/package/manifest.json'),
+    ('lfa-ab', f'{HOME}/analysis/tucson-lfa-ab-3736edc/package/manifest.json'),
+    ('arming', f'{HOME}/analysis/tucson-warning-arming-3736edc/package/manifest.json'),
+]
+CANDIDATE_ONLY = [  # not expected installed; report presence only
+    ('L1c', f'{HOME}/analysis/tucson-long-3736edc-L1c/package/manifest.json'),
+    ('C1', f'{HOME}/analysis/tucson-setspeed-3736edc-C1/package/manifest.json'),
+]
+CLOSEOUT = f'{HOME}/analysis/wobble/closeout_v3b.py'
+ATTRIB = f'{HOME}/drives/long3/attribute_long3b.py'
 MAC_DIR = '/Users/Shared/tucson-llm-handoff-20260923/analysis/hourly-research'
+# known-truncated segments: pre-mark failed at seed so they are never retried
+KNOWN_BAD = {'00000029--af0e2ac1ba--9', '00000002--8b575e90f8--1'}
 
 warnings = []
 
 
-def sh(cmd, timeout=120, capture=True):
-    return subprocess.run(cmd, shell=True, capture_output=capture, text=True, timeout=timeout)
+def sh(cmd, timeout=120, capture=True, env=None):
+    e = dict(os.environ)
+    if env:
+        e.update(env)
+    return subprocess.run(cmd, shell=True, capture_output=capture, text=True, timeout=timeout, env=e)
 
 
 def comma(remote_cmd, timeout=120):
@@ -58,11 +71,14 @@ def summary(**kw):
 def load_state():
     if os.path.exists(STATE):
         return json.load(open(STATE))
-    # Seed from existing exports so the first run does not re-export history.
+    # Seed from existing v3b exports so the first run does not re-export history.
     segs = {}
     for f in sorted(os.listdir(EXPORT_DIR)):
         if f.endswith('.jsonl.gz'):
-            segs[f[:-9]] = {'epoch': 'pre-install', 'exported_utc': 'pre-index'}
+            segs[f[:-9]] = {'exported_utc': 'pre-index'}
+    for s in KNOWN_BAD:
+        if s not in segs:
+            segs[s] = {'failed': True, 'error': 'known truncated rlog', 'exported_utc': 'pre-index'}
     return {'segments': segs, 'created_utc': ts_now()}
 
 
@@ -87,32 +103,75 @@ def inventory():
     return out
 
 
+def seg_commit(seg):
+    try:
+        with gzip.open(f'{EXPORT_DIR}/{seg}.jsonl.gz', 'rt') as g:
+            meta = json.loads(g.readline())['meta']
+        return (meta.get('init') or {}).get('gitCommit', '')[:8]
+    except Exception:
+        return ''
+
+
+def closeout_group(commit, seg):
+    if seg.startswith('00000024--'):
+        return 'v1_route24'
+    if commit.startswith('3736edca'):
+        return 'v2'
+    if commit.startswith('0b8c190c'):
+        return '0b8c190c_pre_tune'
+    return 'baseline_pre0b8c190c'
+
+
 def device_facts():
     facts = {}
     r = comma('cd /data/openpilot && git rev-parse HEAD')
     facts['head'] = r.stdout.strip() if r.returncode == 0 else None
     r = comma('cd /data/openpilot && git status --porcelain | head -50')
     facts['dirty_files'] = [l.strip() for l in r.stdout.splitlines() if l.strip()] if r.returncode == 0 else []
-    # installed-hash check: candidate hashes from both manifests
-    checks = {}
-    for mp in (ARMING_MANIFEST, TUNE_MANIFEST):
-        m = json.load(open(mp))
-        for e in m['files']:
-            checks[e['path']] = e['candidate_sha256']
-    # pandad binary is rebuilt at boot from pandad.cc -> check source only
-    r = comma('cd /data/openpilot && sha256sum ' + ' '.join(checks))
+
+    # installed-state: hash each manifest target, classify vs original/candidate
+    targets = {}  # path -> list of (label, entry)
+    for label, mp in MANIFESTS:
+        for e in json.load(open(mp))['files']:
+            targets.setdefault(e['path'], []).append((label, e))
+    extra = []  # (label, path, candidate)
+    for label, mp in CANDIDATE_ONLY:
+        for e in json.load(open(mp))['files']:
+            extra.append((label, e['path'], e['candidate_sha256']))
+            targets.setdefault(e['path'], [])
+    paths = sorted(targets)
+    r = comma('cd /data/openpilot && sha256sum ' + ' '.join(paths))
     dev = {}
-    for line in r.stdout.splitlines():
-        h, _, path = line.partition('  ')
-        dev[path.strip()] = h
-    facts['installed_files'] = {p: ('match' if dev.get(p) == h or (p == 'iqpilot/selfdrive/pandad/pandad')
-                                    else f'MISMATCH {dev.get(p)}') for p, h in checks.items()}
+    if r.returncode == 0:
+        for line in r.stdout.splitlines():
+            h, _, path = line.partition('  ')
+            dev[path.strip()] = h
+    installed = {}
+    for p in paths:
+        h = dev.get(p)
+        states = []
+        for label, e in targets.get(p, []):
+            acc = [e['candidate_sha256']] + e.get('accepted_current_sha256', [])
+            if h == e['candidate_sha256']:
+                states.append(f'{label}:candidate')
+            elif h == e.get('original_sha256'):
+                states.append(f'{label}:original')
+            elif h in acc:
+                states.append(f'{label}:accepted_prev')
+        for label, ep, cand in extra:
+            if ep == p:
+                states.append(f'{label}:candidate_present' if h == cand else f'{label}:not_installed')
+        if p == 'iqpilot/selfdrive/pandad/pandad':
+            # binary is rebuilt at boot from pandad.cc; source hash is what matters
+            states = [s for s in states if 'arming:' in s] or ['pandad:rebuilt_from_source(see pandad.cc)']
+        installed[p] = {'sha256_12': h[:12] if h else None,
+                        'states': states or ([f'UNKNOWN {h[:12]}'] if h else ['MISSING'])}
+    facts['installed_state'] = installed
     return facts
 
 
 def export_new(new_segs):
-    """Run the device exporter for new segs, pull results. Returns per-seg status."""
-    # Ensure exporter script present on device
+    """Run the device v3 exporter for new segs (exact names, no globs), pull results."""
     r = comma(f'test -f {DEVICE_EXPORTER} && echo present')
     if 'present' not in r.stdout:
         data = open(DEVICE_EXPORTER_LOCAL, 'rb').read()
@@ -125,7 +184,7 @@ def export_new(new_segs):
     for i in range(0, len(new_segs), CHUNK):
         chunk = new_segs[i:i + CHUNK]
         r = comma(f"cd /data/openpilot && PYTHONPATH={PPATH} {VENV} {DEVICE_EXPORTER} "
-                  + ' '.join(chunk), timeout=600)
+                  + ' '.join(chunk), timeout=900)
         statuses.update(dict.fromkeys(chunk, r.stdout.strip()[-2000:] if r.stdout else r.stderr.strip()[-500:]))
     pulled = []
     for seg in new_segs:
@@ -142,190 +201,85 @@ def export_new(new_segs):
     return pulled, statuses
 
 
-def rebuild_frames():
-    r = sh(f"/usr/bin/python3 {HOME}/drives/build_long.py", timeout=600)
+def run_closeout():
+    """Steering closeout over the full v3b export; returns stdout."""
+    r = sh(f'/usr/bin/python3 {CLOSEOUT}', timeout=1200,
+           env={'TUCSON_V3B_DIR': EXPORT_DIR})
     if r.returncode != 0:
-        raise RuntimeError('build_long failed: ' + r.stderr[-500:])
-    return r.stdout.strip()
+        warnings.append('closeout failed: ' + r.stderr[-300:])
+        return ''
+    return r.stdout
 
 
-def seg_epoch_map(state):
-    return {s: d.get('epoch', 'pre-install') for s, d in state['segments'].items()}
+def run_attrib():
+    """long3b attribution over the full v3b export; returns parsed dict."""
+    out = f'{REPORTS}/long3b_attrib_latest.json'
+    r = sh(f'cd {HOME}/drives/long3 && /usr/bin/python3 {ATTRIB}', timeout=1800,
+           env={'TUCSON_V3_DIR': EXPORT_DIR, 'LONG3B_OUT': out})
+    if r.returncode != 0:
+        warnings.append('attribute_long3b failed: ' + r.stderr[-300:])
+        return {}
+    try:
+        return json.load(open(out))
+    except Exception as e:
+        warnings.append(f'attrib json unreadable: {e}')
+        return {}
 
 
-def epoch_events():
-    """Parse meta lines of all exports -> per-epoch event/alert counters."""
-    import collections
-    ev = {'pre-install': collections.Counter(), 'post-install': collections.Counter()}
-    pat_fault = re.compile(r'steer|lka|lfa|ldw|lane|fault|warn', re.I)
-    pat_lfa = re.compile(r'lfa|lkas|laneKeep|preLane|steer.*(unavail|reject|warn)|lfda', re.I)
-    for f in sorted(os.listdir(EXPORT_DIR)):
-        if not f.endswith('.jsonl.gz'):
+def closeout_for_groups(text, groups):
+    """Keep table headers + rows for the requested group labels."""
+    keep = []
+    for line in text.splitlines():
+        if line.startswith('==') or line.startswith('skipped'):
+            keep.append(line)
+        elif any(line.startswith(g + ' ') for g in groups):
+            keep.append(line)
+    return '\n'.join(keep)
+
+
+def new_route_metrics(attrib, new_routes):
+    """launches / stale-set engages / gas overrides restricted to new routes."""
+    launches, engages, gas_n = [], [], 0
+    for rt in new_routes:
+        r = attrib.get(rt)
+        if not r:
             continue
-        seg = f[:-9]
-        try:
-            with gzip.open(f'{EXPORT_DIR}/{f}', 'rt') as g:
-                meta = json.loads(g.readline())['meta']
-        except Exception:
-            continue
-        for tt, w, names in meta.get('events', []):
-            for n in names:
-                if pat_fault.search(str(n)):
-                    ev[seg_epoch_map(STATE_OBJ).get(seg, 'pre-install')][str(n)] += 1
-                if str(n) == 'fcw':
-                    ev[seg_epoch_map(STATE_OBJ).get(seg, 'pre-install')]['fcw'] += 1
-        for tt, t1, t2, status, state in meta.get('alerts', []):
-            if pat_fault.search(str(t1) + str(t2)):
-                ev[seg_epoch_map(STATE_OBJ).get(seg, 'pre-install')][f'alert:{status}'] += 1
-            if pat_lfa.search(str(t1) + str(t2)):
-                ev[seg_epoch_map(STATE_OBJ).get(seg, 'pre-install')]['lfa_like_alert'] += 1
-    return ev
+        for L in r['launches']:
+            launches.append((rt[-2:], L['T'], L['ju_rel'], L['a_peak1s'], L['cmd_peak3s']))
+        for E in r['engages']:
+            if E['gap'] is not None and E['gap'] < -1.0 and E['min_acco_6s'] < -0.5:
+                engages.append((rt[-2:], E['T'], E['v'], E['set_v'], E['gap'],
+                                E['min_acco_6s'], E['gas_6s'], E['btn']))
+        gas_n += len(r['gas'])
+    return launches, engages, gas_n
 
 
-STATE_OBJ = None
-
-
-def analyze(epoch_of_seg):
-    import numpy as np
-    A = np.load(FRAMES)
-    C = json.load(open(COLS))
-    ix = {c: i for i, c in enumerate(C)}
-
-    def col(n):
-        return A[:, ix[n]]
-    rid, seg = col('rid').astype(int), col('seg').astype(int)
-    segname = np.array([f'{r:08x}--{s}' for r, s in zip(rid, seg)])
-    # rid is int(hexprefix): segment name in exports is <8hex>--<hash>--<n>; rid only
-    # encodes the first hex group, so map epoch by (rid,seg) via export name prefix.
-    ep = {}
-    for name, e in epoch_of_seg.items():
-        pre, _, sn = name.rpartition('--')
-        try:
-            ep[(int(pre.split('--')[0], 16), int(sn))] = e
-        except ValueError:
-            pass
-    epoch = np.array([ep.get((int(r), int(s)), 'pre-install') for r, s in zip(rid, seg)])
-
-    cols = {n: col(n) for n in ['t', 'v', 'a', 'acc', 'lon', 'en', 'cen', 'gas', 'brk', 'ss', 'curv',
-                                'ala', 'dla', 'tq', 'tqo', 'p', 'i', 'f', 'out', 'err', 'act', 'prs',
-                                'ang', 'rate', 'sat', 'dtq', 'yaw', 'lat']}
-    out = {}
-    BINS = [(5, 10), (10, 15), (15, 20), (20, 25), (25, 40)]
-    for ep_name in ('pre-install', 'post-install'):
-        em = epoch == ep_name
-        res = {'frames': int(em.sum())}
-        if em.sum() < 1000:
-            res['note'] = 'insufficient data'
-            out[ep_name] = res
-            continue
-        act = em & (cols['act'] == 1)
-        good = act & (cols['prs'] == 0) & (cols['lat'] == 1)
-        res['active_hours'] = round(float(act.sum()) / 360000, 3)
-
-        # torque dither RMS (x270) by speed bin, contiguous active frames
-        same = (rid[1:] == rid[:-1]) & (seg[1:] == seg[:-1])  # length N-1, indexed to frame i+1
-        dtq = np.abs(np.diff(cols['tqo'])) * 270
-        ok = same & (cols['act'][1:] == 1) & (cols['act'][:-1] == 1) & em[1:]
-        vv = cols['v'][1:]
-        res['dither_rms_x270'] = {f'{lo}-{hi}': round(float(np.sqrt(np.mean(dtq[ok & (vv >= lo) & (vv < hi)] ** 2))), 3)
-                                for lo, hi in BINS if (ok & (vv >= lo) & (vv < hi)).sum() > 200}
-        # actual/requested lat accel ratio by speed bin (|dla|>0.3)
-        res['lataccel_ratio'] = {}
-        m0 = good & (np.abs(cols['dla']) > 0.3)
-        for lo, hi in BINS:
-            m = m0 & (cols['v'] >= lo) & (cols['v'] < hi)
-            if m.sum() > 300:
-                res['lataccel_ratio'][f'{lo}-{hi}'] = round(float(
-                    np.median(cols['ala'][m] * np.sign(cols['dla'][m])) / np.median(np.abs(cols['dla'][m]))), 3)
-        res['p_oppose_ff_frac'] = round(float(
-            (np.sign(cols['p'][m0]) != np.sign(cols['f'][m0])).mean()), 3) if m0.sum() else None
-        res['steer_sat_pct'] = round(100 * float((good & (cols['sat'] == 1)).sum()) / max(good.sum(), 1), 3)
-        res['tq_over_095_pct'] = round(100 * float((good & (np.abs(cols['tqo']) > 0.95)).sum()) / max(good.sum(), 1), 3)
-
-        # steering overrides >=0.3s while lat active
-        pr = (cols['prs'] == 1) & (cols['lat'] == 1) & em
-        idx = np.flatnonzero(pr)
-        eps = 0
-        if len(idx):
-            s0 = pidx = idx[0]
-            for k in idx[1:]:
-                if k != pidx + 1:
-                    if pidx - s0 >= 30:
-                        eps += 1
-                    s0 = k
-                pidx = k
-            if pidx - s0 >= 30:
-                eps += 1
-        res['steer_overrides_per_hr'] = round(eps / max(res['active_hours'], 1e-6), 1)
-
-        # ---- longitudinal ----
-        lon = em & (cols['lon'] == 1) & (cols['en'] == 1)
-        res['long_hours'] = round(float(lon.sum()) / 360000, 3)
-        a_, acc, v_ = cols['a'], cols['acc'], cols['v']
-        # cmd-vs-actual lag: best corr shift 0..2s on lon frames
-        lags = []
-        idxl = np.flatnonzero(lon & (v_ > 5))
-        for s in range(0, len(idxl) - 500, 500):
-            ids = idxl[s:s + 500]
-            x, y = acc[ids] - acc[ids].mean(), a_[ids] - a_[ids].mean()
-            if x.std() < 0.1 or y.std() < 0.1:
-                continue
-            best = max(range(0, 200, 5), key=lambda L: np.corrcoef(x[:-L or None], y[L:])[0, 1] if L else np.corrcoef(x, y)[0, 1])
-            lags.append(best / 100)
-        res['cmd_lag_s'] = round(float(np.median(lags)), 2) if lags else None
-        mpos = lon & (acc > 1.0) & (v_ > 3)
-        mneg = lon & (acc < -1.0) & (v_ > 3)
-        res['pos_step_ratio'] = round(float(np.median(a_[mpos] / acc[mpos])), 3) if mpos.sum() > 200 else None
-        res['neg_step_ratio'] = round(float(np.median(a_[mneg] / acc[mneg])), 3) if mneg.sum() > 200 else None
-        dl = same & (lon[1:] == 1) & (lon[:-1] == 1) & em[1:]
-        res['jerk_rms'] = round(float(np.sqrt(np.mean((np.diff(a_)[dl] * 100) ** 2))), 3) if dl.sum() else None
-        # stop-end accel: cmd in final 1s before standstill
-        stops = np.flatnonzero((cols['ss'][1:] == 1) & (cols['ss'][:-1] == 0) & (lon[:-1] == 1) & em[:-1]) + 1
-        stops = stops[(stops >= 100) & (rid[np.clip(stops - 100, 0, len(A) - 1)] == rid[np.clip(stops, 0, len(A) - 1)])]
-        res['stop_end_cmd'] = round(float(np.mean([acc[s - 100:s].mean() for s in stops])), 3) if len(stops) else None
-        # launch accel: peak a within 3s of leaving standstill while lon
-        launches = np.flatnonzero((cols['ss'][1:] == 0) & (cols['ss'][:-1] == 1) & (lon[:-1] == 1) & em[:-1]) + 1
-        launches = launches[(launches + 300 < len(A)) & (rid[launches + 300] == rid[launches])]
-        res['launch_peak_a'] = round(float(np.mean([a_[s:s + 300].max() for s in launches])), 3) if len(launches) else None
-        en = em & (cols['en'] == 1)
-        gasr = np.diff((cols['gas'] == 1).astype(int)) == 1
-        brkr = np.diff((cols['brk'] == 1).astype(int)) == 1
-        res['gas_overrides_per_hr'] = round(float((gasr & en[1:]).sum()) / max(res['active_hours'], 1e-6), 1)
-        res['brake_overrides_per_hr'] = round(float((brkr & en[1:]).sum()) / max(res['active_hours'], 1e-6), 1)
-        out[ep_name] = res
-    return out
-
-
-def build_report(ts, new_segs, epoch_of_seg, facts, statuses, metrics, ev, duration):
-    lines = [f'# Research refresh {ts}', '']
+def build_report(ts, new_segs, facts, closeout_txt, newest_group, attrib, new_routes, duration):
+    lines = [f'# Research refresh {ts} (v3b)', '']
     if not new_segs:
         lines.append('No new data.')
         return '\n'.join(lines) + '\n'
-    lines.append(f'New segments: {len(new_segs)} (total exported duration {duration:.0f} s)')
+    lines.append(f'New segments: {len(new_segs)} (approx {duration:.0f} s); new routes: {new_routes}')
     lines.append(f'Device HEAD: {facts.get("head")}; dirty files: {len(facts.get("dirty_files", []))}')
-    bad = {p: s for p, s in facts.get('installed_files', {}).items() if s != 'match'}
-    lines.append(f'Installed-file hash check: {"all candidate" if not bad else bad}')
+    bad = {p: s['states'] for p, s in facts.get('installed_state', {}).items()
+           if any('UNKNOWN' in x or 'MISSING' in x or x.endswith(':original') for x in s['states'])}
+    lines.append(f'Installed-state anomalies: {bad if bad else "none"}')
     lines.append('')
-    for ep in ('pre-install', 'post-install'):
-        m = metrics[ep]
-        lines.append(f'## {ep} ({"baseline" if ep == "pre-install" else "A/B result"})')
-        if 'note' in m:
-            lines.append(f"{m['note']} ({m['frames']} frames)"); lines.append(''); continue
-        lines.append(f"active hours {m['active_hours']}, long hours {m['long_hours']}")
-        lines.append('### Steering')
-        lines.append(f"- torque dither RMS x270 by speed: {m['dither_rms_x270']}")
-        lines.append(f"- actual/requested latAccel ratio by speed: {m['lataccel_ratio']}")
-        lines.append(f"- P opposing FF fraction: {m['p_oppose_ff_frac']}")
-        lines.append(f"- steer saturation: {m['steer_sat_pct']}% (|tqo|>0.95: {m['tq_over_095_pct']}%)")
-        lines.append(f"- driver steering overrides: {m['steer_overrides_per_hr']}/active-hr")
-        lines.append(f"- steering/LKA/LFA-related events: {dict(ev.get(ep, {}))}")
-        lines.append('### Longitudinal')
-        lines.append(f"- cmd-vs-actual lag: {m['cmd_lag_s']} s")
-        lines.append(f"- pos/neg step ratios: {m['pos_step_ratio']} / {m['neg_step_ratio']}")
-        lines.append(f"- jerk RMS: {m['jerk_rms']} m/s^3")
-        lines.append(f"- stop-end cmd accel: {m['stop_end_cmd']}; launch peak accel: {m['launch_peak_a']}")
-        lines.append(f"- gas/brake overrides: {m['gas_overrides_per_hr']} / {m['brake_overrides_per_hr']} per active-hr")
-        lines.append('')
+    lines.append(f'## Steering closeout — {newest_group} vs baseline')
+    lines.append('```')
+    lines.append(closeout_for_groups(closeout_txt, ('baseline_pre0b8c190c', newest_group)))
+    lines.append('```')
+    lines.append('')
+    launches, engages, gas_n = new_route_metrics(attrib, new_routes)
+    lines.append('## New-route longitudinal (long3b attribution)')
+    lines.append(f'launches ({len(launches)}): route T ju_rel a_peak1s cmd_peak3s')
+    for row in launches:
+        lines.append(f'- {row}')
+    lines.append(f'stale-set engages (set-v below v by >1 m/s, min_acco_6s<-0.5): {len(engages)}')
+    for row in engages:
+        lines.append(f'- {row}')
+    lines.append(f'gas overrides on new routes: {gas_n}')
+    lines.append('')
     return '\n'.join(lines) + '\n'
 
 
@@ -360,7 +314,6 @@ def mac_copy(path, ts):
 
 
 def main():
-    global STATE_OBJ
     ts = ts_now()
     status = {'reachable': False}
     r = comma('true', timeout=40)
@@ -368,14 +321,16 @@ def main():
         status['ts'] = ts
         os.makedirs(f'{HOURLY}/state', exist_ok=True)
         json.dump(status, open(f'{HOURLY}/state/last_status.json', 'w'))
-        summary(**status, new_segments=0, report_path=None, pushed_commit=None, warnings=['comma unreachable'])
+        summary(**status, new_segments=0, new_routes=[], report_path=None,
+                pushed_commit=None, installed_state=None, warnings=['comma unreachable'])
         return
     status['reachable'] = True
-    STATE_OBJ = load_state()
+    st = load_state()
     try:
         inv = inventory()
     except Exception as e:
-        summary(**status, error=str(e), new_segments=0, report_path=None, pushed_commit=None, warnings=[str(e)])
+        summary(**status, error=str(e), new_segments=0, new_routes=[], report_path=None,
+                pushed_commit=None, installed_state=None, warnings=[str(e)])
         return
     try:
         facts = device_facts()
@@ -383,34 +338,32 @@ def main():
         warnings.append(f'device facts failed: {e}')
         facts = {}
     status.update(facts)
-    known = set(STATE_OBJ['segments'])
+    known = set(st['segments'])
     local = {f[:-9] for f in os.listdir(EXPORT_DIR) if f.endswith('.jsonl.gz')}
     new_segs = sorted(s for s in inv if s not in known and s not in local)
-    post = [s for s in new_segs if inv[s] >= INSTALL_UTC]
     pulled, statuses = ([], {})
     if new_segs:
         pulled, statuses = export_new(new_segs)
         for s in pulled:
-            STATE_OBJ['segments'][s] = {'epoch': 'post-install' if inv[s] >= INSTALL_UTC else 'pre-install',
-                                        'mtime': inv[s], 'exported_utc': ts}
-        # Record unpulled (failed) segments so they are not retried every hour.
+            st['segments'][s] = {'mtime': inv[s], 'exported_utc': ts}
         for s in new_segs:
             if s not in pulled:
-                STATE_OBJ['segments'][s] = {'epoch': 'post-install' if inv[s] >= INSTALL_UTC else 'pre-install',
-                                            'mtime': inv[s], 'failed': True,
-                                            'error': statuses.get(s, '')[-200:]}
+                st['segments'][s] = {'mtime': inv[s], 'failed': True,
+                                     'error': statuses.get(s, '')[-200:]}
                 warnings.append(f'export failed (recorded, will not retry): {s}')
-        save_state(STATE_OBJ)
+        save_state(st)
     report_path = None
     pushed = None
+    os.makedirs(REPORTS, exist_ok=True)
     if pulled:
-        rebuild_frames()
-        ep_of = seg_epoch_map(STATE_OBJ)
-        metrics = analyze(ep_of)
-        ev = epoch_events()
-        duration = len(pulled) * 60.0
-        report = build_report(ts, pulled, ep_of, facts, statuses, metrics, ev, duration)
-        os.makedirs(REPORTS, exist_ok=True)
+        new_routes = sorted({s.split('--')[0] for s in pulled})
+        closeout_txt = run_closeout()
+        attrib = run_attrib()
+        newest = max(new_routes)
+        ref_seg = next((s for s in pulled if s.startswith(newest + '--')), pulled[-1])
+        newest_group = closeout_group(seg_commit(ref_seg), ref_seg)
+        report = build_report(ts, pulled, facts, closeout_txt, newest_group, attrib,
+                              new_routes, len(pulled) * 60.0)
         report_path = f'{REPORTS}/{ts}.md'
         open(report_path, 'w').write(report)
         if os.environ.get('REFRESH_NO_PUBLISH'):
@@ -419,14 +372,17 @@ def main():
             pushed = publish(ts, report)
             mac_copy(report_path, ts)
     else:
-        os.makedirs(REPORTS, exist_ok=True)
         report_path = f'{REPORTS}/{ts}.md'
-        open(report_path, 'w').write(f'# Research refresh {ts}\n\nNo new data.\n')
+        open(report_path, 'w').write(f'# Research refresh {ts} (v3b)\n\nNo new data.\n')
         if new_segs and not pulled:
             warnings.append('new segments found but none pulled')
-    summary(reachable=True, new_segments=len(new_segs), post_install_segments=len(post),
-            pulled=len(pulled), report_path=report_path, pushed_commit=pushed,
-            head=facts.get('head'), warnings=warnings)
+    json.dump({'ts': ts, 'reachable': True, 'new_segments': len(pulled)},
+              open(f'{HOURLY}/state/last_status.json', 'w'))
+    summary(reachable=True, new_segments=len(pulled),
+            new_routes=sorted({s.split('--')[0] for s in pulled}),
+            report_path=report_path, pushed_commit=pushed,
+            head=facts.get('head'), installed_state=facts.get('installed_state'),
+            warnings=warnings)
 
 
 if __name__ == '__main__':
@@ -436,4 +392,3 @@ if __name__ == '__main__':
         import traceback
         traceback.print_exc()
         summary(reachable=None, error=str(e), warnings=warnings)
-        sys.exit(0)
