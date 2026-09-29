@@ -1,0 +1,33 @@
+--- a/iqpilot/selfdrive/car/cruise.py
++++ b/iqpilot/selfdrive/car/cruise.py
+@@ -344,7 +344,18 @@
+         self.button_change_states[b.type.raw] = {"standstill": CS.cruiseState.standstill, "enabled": enabled}
+ 
+   def initialize_v_cruise(self, CS, experimental_mode: bool, iq_dynamic_mode: bool) -> None:
+-    if self.CP.pcmCruise or self.v_cruise_initialized:
++    if self.CP.pcmCruise:
++      return
++
++    set_pressed = any(b.type in (ButtonType.decelCruise, ButtonType.setCruise) for b in CS.buttonEvents)
++    resume_pressed = any(b.type in (ButtonType.accelCruise, ButtonType.resumeCruise) for b in CS.buttonEvents)
++
++    if self.v_cruise_initialized:
++      if set_pressed:
++        self.v_cruise_kph = int(round(np.clip(CS.vEgo * CV.MS_TO_KPH, self.v_cruise_min, V_CRUISE_MAX)))
++      elif resume_pressed:
++        self.v_cruise_kph = self.v_cruise_kph_last
++      self.v_cruise_cluster_kph = self.v_cruise_kph
+       return
+ 
+     initial_experimental_mode = experimental_mode and not iq_dynamic_mode
+@@ -352,9 +363,6 @@
+     if initial_experimental_mode:
+       initial = self.get_iq_mode_initial_set_speed_kph(CS.vEgo * CV.MS_TO_KPH, initial)
+ 
+-    if any(b.type in (ButtonType.accelCruise, ButtonType.resumeCruise) for b in CS.buttonEvents) and self.v_cruise_initialized:
+-      self.v_cruise_kph = self.v_cruise_kph_last
+-    else:
+-      self.v_cruise_kph = int(round(np.clip(CS.vEgo * CV.MS_TO_KPH, initial, V_CRUISE_MAX)))
++    self.v_cruise_kph = int(round(np.clip(CS.vEgo * CV.MS_TO_KPH, initial, V_CRUISE_MAX)))
+ 
+     self.v_cruise_cluster_kph = self.v_cruise_kph
