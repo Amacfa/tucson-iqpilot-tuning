@@ -1,0 +1,20 @@
+--- a/.venv/lib/python3.12/site-packages/iqdbc/car/hyundai/carcontroller.py
++++ b/.venv/lib/python3.12/site-packages/iqdbc/car/hyundai/carcontroller.py
+@@ -797,11 +797,13 @@
+         jerk_l_raw = np.clip(jerk_l_base + 2.0 * max(0.0, -accel - 2.8), jerk_l_base, jerk_max_l)
+         jerk_l_mpc = np.clip(-self.jerk * 4.0, jerk_l_base, jerk_max_l)
+ 
+-        # Same treatment for acceleration authority: a floor plus a raw-request boost, so positive
+-        # requests are not held to the 0.5 m/s^3 ramp once the MPC jerk settles.
++        # Acceleration authority: a floor plus a raw-request boost so positive requests are not
++        # held to the 0.5 m/s^3 ramp once the MPC jerk settles; the boost is capped low at launch
++        # speeds and ramps up to the full jerk limit by ~8 m/s.
+         jerk_u_base = 1.0
+-        jerk_u_raw = np.clip(jerk_u_base + 2.0 * max(0.0, accel - 1.0), jerk_u_base, jerk_max_u)
+-        jerk_u_mpc = np.clip(self.jerk * 2.0, jerk_u_base, jerk_max_u)
++        jerk_u_cap = float(np.interp(CS.out.vEgo, [3.0, 8.0], [1.2, jerk_max_u]))
++        jerk_u_raw = np.clip(jerk_u_base + 1.0 * max(0.0, accel - 1.0), jerk_u_base, jerk_u_cap)
++        jerk_u_mpc = np.clip(self.jerk * 2.0, jerk_u_base, jerk_u_cap)
+ 
+         self.jerk_u = max(jerk_u_raw, jerk_u_mpc)
+         self.jerk_l = max(jerk_l_raw, jerk_l_mpc)

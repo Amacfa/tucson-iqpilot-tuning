@@ -1,0 +1,14 @@
+{
+ "README.md": "758c7f3ea7cdbc683e4d522d8310132f9cdf3f1278603b35c3d340c43c013339",
+ "candidate/.venv/lib/python3.12/site-packages/iqdbc/car/hyundai/carcontroller.py": "d39152216200edd025ea2041e259f4227fd7bc6cec0ce150b208a5b1e8b455e7",
+ "forward.patch": "9fa97d53821b4570b04a2efca273cbffe7a73629b0187b49c1e35b25a887af4f",
+ "manage.py": "1f1ee800d83362472f9de0a868a36e528bec9da691e9542a7cc9c32ccd0ea3a6",
+ "manifest.json": "e74490ef285020c61e394cec65ab5fd3165337f4b6b27a0e9668295930a9a030",
+ "reverse.patch": "0bdbf99b80ba2517bd9cd39a8f60cb36563f9fc573e8672b452b07a809fe77ff",
+ "rollback/.venv/lib/python3.12/site-packages/iqdbc/car/hyundai/carcontroller.py": "a8cf776cefaa8e5cf54621165df58404fa1f85ccece36f9ab11e4274737af7a5",
+ "test_artifacts.py": "4436811fc4d185f61b431300c4768214fffd0893532ca1ca1512bc7fef6212fb",
+ "test_manage.py": "6b7c2e41314a7023187b5b651407057d6a78f1ee64b71fb120eeeb39cfcb1aa6",
+ "validation/RESULTS.md": "15c7bfccd6af15906d1777114979e83b1dabcf8a380d5cec94a554a87c193e30",
+ "validation/replay_torque.py": "3f874053954de3a93e8763d41c477a894758ec24114a971169f3c45b62c3d628",
+ "validation/test_jerk_cap.py": "445549a310f29b04197f4c1a2b3f48411446585359d57a2420aebe1d8c705008"
+}
