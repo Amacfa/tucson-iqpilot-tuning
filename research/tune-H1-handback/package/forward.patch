@@ -1,0 +1,34 @@
+diff --git a/iqpilot/selfdrive/controls/lib/latcontrol_torque.py b/iqpilot/selfdrive/controls/lib/latcontrol_torque.py
+index 25ca766..e12f941 100644
+--- a/iqpilot/selfdrive/controls/lib/latcontrol_torque.py
++++ b/iqpilot/selfdrive/controls/lib/latcontrol_torque.py
+@@ -516,6 +516,10 @@ class LatControlTorque(LatControl):
+     p_gains = [gain * 0.8 for gain in KP_INTERP] if self.hkg_reduced_torque_feedback else KP_INTERP
+     self.friction_scale = 0.7 if self.hkg_reduced_torque_feedback else 1.0
+     self.pid = PIDController([INTERP_SPEEDS, p_gains], KI, rate=1/self.dt)
++    # H1: base speed-scheduled P table; scaled down above ~15 m/s in update().
++    self._kp_base = [self.pid._k_p[0], list(self.pid._k_p[1])]
++    # H1: 0.3 s first-order LP state for the friction-compensation error input.
++    self._fric_err_lp = 0.0
+     self.update_limits()
+     self.steering_angle_deadzone_deg = self.torque_params.steeringAngleDeadzoneDeg
+     self.lat_accel_request_buffer_len = int(LAT_ACCEL_REQUEST_BUFFER_SECONDS / self.dt)
+@@ -575,7 +579,8 @@ class LatControlTorque(LatControl):
+     gravity_adjusted_future_lateral_accel = future_desired_lateral_accel - roll_compensation
+     ff = gravity_adjusted_future_lateral_accel
+     ff -= self.torque_params.latAccelOffset
+-    ff += self.friction_scale * get_friction(error + JERK_GAIN * desired_lateral_jerk, lateral_accel_deadzone,
++    self._fric_err_lp += (error - self._fric_err_lp) * self.dt / 0.3
++    ff += self.friction_scale * get_friction(self._fric_err_lp + JERK_GAIN * desired_lateral_jerk, lateral_accel_deadzone,
+                                             FRICTION_THRESHOLD, self.torque_params)
+ 
+     if not active:
+@@ -585,6 +590,8 @@ class LatControlTorque(LatControl):
+       pid_log.error = float(error)
+ 
+       freeze_integrator = steer_limited_by_safety or CS.steeringPressed or CS.vEgo < 5
++      kp_scale = float(np.interp(CS.vEgo, [13.0, 17.0], [1.0, 0.6]))
++      self.pid._k_p = [self._kp_base[0], [k * kp_scale for k in self._kp_base[1]]]
+       output_lataccel = self.pid.update(pid_log.error, speed=CS.vEgo, feedforward=ff, freeze_integrator=freeze_integrator)
+       output_torque = self.torque_from_lateral_accel(output_lataccel, self.torque_params)
+ 

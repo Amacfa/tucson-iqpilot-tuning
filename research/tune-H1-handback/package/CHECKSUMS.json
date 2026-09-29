@@ -1,0 +1,13 @@
+{
+ "README.md": "2716eff91bfbcec191d7286838a82536a6bfcc47a70f6dd22d7426993507b081",
+ "candidate/iqpilot/selfdrive/controls/lib/latcontrol_torque.py": "97cc8ee48772633dd9dcf470165a8259c4ebb7e89a04ed5c17652f5aa48990dd",
+ "forward.patch": "9592ea1f995f78646272abda0d23f47efd9afe84c7dbd02cc03756c789b3f313",
+ "manage.py": "1f1ee800d83362472f9de0a868a36e528bec9da691e9542a7cc9c32ccd0ea3a6",
+ "manifest.json": "bbd3ad55c15ac9dffc0f583d85d62c573b490f4b84781fd2337478a8b0c80660",
+ "reverse.patch": "a1f1f4629e63de402bfa386563b8e785f56ae5fbed44d624bde0d6e8ba7a05ab",
+ "rollback/iqpilot/selfdrive/controls/lib/latcontrol_torque.py": "277aff99ea5451470e885520a44902137ddadc962fc05336f398ec1ed90e815f",
+ "test_artifacts.py": "4436811fc4d185f61b431300c4768214fffd0893532ca1ca1512bc7fef6212fb",
+ "test_manage.py": "6b7c2e41314a7023187b5b651407057d6a78f1ee64b71fb120eeeb39cfcb1aa6",
+ "validation/RESULTS.md": "f6cb898fb88175353b6b1ca79462a101918af9f3a5d63d9a06f876e666b4d9b6",
+ "validation/test_h1.py": "f7cfdfaaa292f95ec896050fefe5b28800ff323ac6eee4d0242d4df2363a6276"
+}

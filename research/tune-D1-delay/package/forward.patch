@@ -1,0 +1,17 @@
+diff --git a/iqpilot/selfdrive/controls/controlsd.py b/iqpilot/selfdrive/controls/controlsd.py
+index 7022a30..323ed2b 100644
+--- a/iqpilot/selfdrive/controls/controlsd.py
++++ b/iqpilot/selfdrive/controls/controlsd.py
+@@ -269,6 +269,12 @@ class Controls(IQControlsLayer):
+     lat_accel_override = bool(CS.gasPressed) or bool(self.sm['iqState'].aol.active)
+     self.desired_curvature, curvature_limited = clip_curvature(CS.vEgo, self.desired_curvature, new_desired_curvature, lp.roll, lat_accel_override)
+     lat_delay = lateral_action_delay(self.params, self.CP, self.sm["lateralDelay"].lateralDelay) + LAT_SMOOTH_SECONDS
++    # D1: while lagd is unestimated the lateralDelay message carries the fixed 0.30 s
++    # initial value (steerActuatorDelay + 0.2); cap this fingerprint's request-buffer
++    # lookahead at 0.15 s. A real lagd estimate (or any other fingerprint) passes through.
++    if (self.CP.carFingerprint == "HYUNDAI_TUCSON_4TH_GEN"
++        and self.sm["lateralDelay"].status == log.LateralDelay.Status.unestimated):
++      lat_delay = min(lat_delay, 0.15)
+ 
+     actuators.curvature = self.desired_curvature
+     steer, steeringAngleDeg, lac_log = self.LaC.update(CC.latActive, CS, self.VM, lp,
