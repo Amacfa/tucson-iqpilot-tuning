@@ -202,6 +202,17 @@ def device_facts():
     facts['param_drift'] = drift
     if drift:
         warnings.append(f'param drift: {drift}')
+
+    # active model bundle (ModelManager may auto-switch; record + warn on change)
+    r = comma(f'cd /data/openpilot && PYTHONPATH={PPATH} {VENV} -c '
+              f'"from iqpilot.common.params import Params; '
+              f'ab=Params().get(\'ModelManager_ActiveBundle\'); '
+              f'print(ab.get(\'index\'), ab.get(\'internalName\'))"')
+    if r.returncode == 0 and r.stdout.strip():
+        parts = r.stdout.strip().split(None, 1)
+        facts['active_model'] = {'index': int(parts[0]), 'internalName': parts[1].strip()}
+    else:
+        facts['active_model'] = None
     return facts
 
 
@@ -357,7 +368,8 @@ def main():
         os.makedirs(f'{HOURLY}/state', exist_ok=True)
         json.dump(status, open(f'{HOURLY}/state/last_status.json', 'w'))
         summary(**status, new_segments=0, new_routes=[], report_path=None,
-                pushed_commit=None, installed_state=None, warnings=['comma unreachable'])
+                pushed_commit=None, installed_state=None, active_model=None,
+                warnings=['comma unreachable'])
         return
     status['reachable'] = True
     st = load_state()
@@ -373,6 +385,14 @@ def main():
         warnings.append(f'device facts failed: {e}')
         facts = {}
     status.update(facts)
+    cur_model = facts.get('active_model')
+    prev_model = st.get('active_model') or {'index': 77, 'internalName': 'KARNBIRRLV2'}
+    if cur_model:
+        if cur_model != prev_model:
+            warnings.append(f"active model changed: {prev_model['internalName']}({prev_model['index']})"
+                            f" -> {cur_model['internalName']}({cur_model['index']})")
+        st['active_model'] = cur_model
+        save_state(st)
     known = set(st['segments'])
     local = {f[:-9] for f in os.listdir(EXPORT_DIR) if f.endswith('.jsonl.gz')}
     new_segs = sorted(s for s in inv if s not in known and s not in local)
@@ -417,7 +437,7 @@ def main():
             new_routes=sorted({s.split('--')[0] for s in pulled}),
             report_path=report_path, pushed_commit=pushed,
             head=facts.get('head'), installed_state=facts.get('installed_state'),
-            warnings=warnings)
+            active_model=facts.get('active_model'), warnings=warnings)
 
 
 if __name__ == '__main__':
