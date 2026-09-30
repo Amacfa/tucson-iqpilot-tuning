@@ -47,3 +47,12 @@ p.put_bool('EnableLongComfortMode', False)
 
 `hourly/refresh.py` now carries `EXPECTED_PARAMS` — any drift on these four is flagged in
 `device_facts.param_drift` and report warnings on every hourly tick.
+
+## Re-application note (2026-09-30, post-L1c/C1 install)
+
+`LongitudinalPersonality` was found reverted to `2` at the v5-drive ingest (param_drift
+flagged by hourly) and **again after the install reboot** — the value does not appear to
+persist across reboot. Re-applied `1` (Standard) via `Params().put`; readback `1` and the
+hourly drift check is clean. If it keeps reverting, suspect the UI writing the last-chosen
+driving mode at boot rather than param loss — recommend the user set Personality =
+Standard in the comma UI once so the UI state agrees.
