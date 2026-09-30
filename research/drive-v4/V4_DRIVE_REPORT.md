@@ -59,3 +59,28 @@ Route 2e: lon 633 s, **3 launches** (a_peak1s 2.34/2.41/2.38, ju_rel 2.4–2.7, 
 v4 delivered: zero detected oscillation episodes, lowest curve-exit band_rms of any group (3.35), zero saturation, lowest override share, and comfort metrics back to baseline/human-adjacent levels. Residual watch items: 5–10 m/s tracking 0.94 (mild under-turn from ×0.7 P — integrator is absorbing it) and exit-tracking ~1.3 residual unwind lag (≈v2-level once measured on the common reference; partially metric timing). If the "small wobble" recurs, catch it with a sub-3 s detector next pull; no new candidate warranted from this data alone.
 
 Scripts: `drive_v4_detail.py` (episodes + undelayed-reference curves + comfort + i_rms), `closeout_v3b.py` (v4 group added), data in `drives/export-v3b/0000002e*`.
+
+## Follow-up: sub-threshold wobble hunt + tracking detail (2026-09-30)
+
+### Sub-threshold wobble hunt
+Detector: joint sliding windows 1.0/2.0/3.0 s over the whole route; require band-frac>0.5 in the **1.0–2.5 Hz** band on `-tqo` with amp>0.2 (≈0.5× the v3h1d1 episode threshold), ala amp>0.15, ang amp>0.8; joint score ranked, overlapping windows deduped.
+
+**One candidate survived** — the likely felt "small wobble":
+
+| seg@t | dur | v | freq | p_rms | i_rms | f_rms | out_rms | ctx | lead |
+|---|---|---|---|---|---|---|---|---|---|
+| 2e--31 @47.1 | 1.1 s | 6.0 m/s | 1.01 Hz | 1.21 | 0.21 | 1.06 | 0.41 | curve-exit | P-led |
+
+Self-terminating (1.1 s), low speed, **P-led** but shallow — same family as the v3h1d1 low-speed episodes at half the frequency and a third the duration. No candidates near a lane change or in the ≥13 m/s kp region.
+
+### Tracking by speed, 1 m/s bins, undelayed ref, unpressed/unsaturated, |ref| split
+(format: `tr`, signed-mean p and i — sign = relative to desired direction; negative p = feedback pulling AGAINST desired = over-production)
+
+- **v4 10–16 m/s, mid-band steady**: tr **1.14–1.18** with signed p ≈ **−0.15…−0.28**, i ≈ 0.03–0.12 → the car over-produces lateral accel through feedforward and P/I trim it back → **FF over-scaled**, not a lane-model under-ask. Same signature in **v2** at the same bins (1.10–1.16, p −0.1…−0.3) → **inherited, not a v4 regression**; v3h1d1's exit bins showed extreme negative p (−1.8…−5.4) from the unwind fight, now gone.
+- **v4 5–7 m/s steady hi-demand**: tr 0.85–1.09, mid-band entry at 6 m/s tr 0.71 → the ×0.7 P **is** producing a real (if mild) under-response at 5–7 m/s — matches the 5–10 bin 0.94 in the closeout. Signed p is positive (pulling with desired) there — the loop is doing its best within the scaled gain; i compensates partially (i_rms 0.17 vs v2 0.11).
+- **Exits** (both groups): tr 1.2–1.7 at all speeds with negative signed p — physical unwind lag, P pulling against the still-high actual. Same shape in v2; not a regression.
+- **16–19 m/s exits**: tr up to 1.45–1.69 on small n — same unwind mechanics at higher demand.
+
+Net: the 10–20 m/s 1.11–1.15 over-track is **feedforward latAccelFactor still a touch low in that range** (v3 3.80 at 15 could go ~+5–10%); low-speed 5–7 m/s shows a small under-response from v4's ×0.7 P — if user feel reports under-steer at parking speeds, the next knob is interpolating 0.7→1.0 below ~7 m/s rather than raising the whole floor. No candidate built — data supports either staying on v4 or a micro-refit.
+
+Script: `v4_followup.py`.
