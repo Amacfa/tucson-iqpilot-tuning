@@ -42,6 +42,13 @@ CANDIDATE_ONLY = [  # report presence only (L1c/C1 never installed; v3/H1/D1 ins
     ('L1c', f'{HOME}/analysis/tucson-long-3736edc-L1c/package/manifest.json'),
     ('C1', f'{HOME}/analysis/tucson-setspeed-3736edc-C1/package/manifest.json'),
 ]
+# expected device params (settings applied 2026-09-30, user-approved); drift is flagged in facts
+EXPECTED_PARAMS = {
+    'ExperimentalMode': 'False',
+    'LongIncrementsEnabled': 'True',
+    'IQE2ESetSpeedUseCurrent': 'False',
+    'EnableLongComfortMode': 'True',
+}
 CLOSEOUT = f'{HOME}/analysis/wobble/closeout_v3b.py'
 ATTRIB = f'{HOME}/drives/long3/attribute_long3b.py'
 MAC_DIR = '/Users/Shared/tucson-llm-handoff-20260923/analysis/hourly-research'
@@ -172,6 +179,27 @@ def device_facts():
         installed[p] = {'sha256_12': h[:12] if h else None,
                         'states': states or ([f'UNKNOWN {h[:12]}'] if h else ['MISSING'])}
     facts['installed_state'] = installed
+
+    # expected-param drift check
+    r = comma(f'cd /data/openpilot && PYTHONPATH={PPATH} {VENV} -c '
+              f'"from iqpilot.common.params import Params; p=Params(); '
+              f'[print(k, p.get(k)) for k in {list(EXPECTED_PARAMS)}]"')
+    drift = {}
+    if r.returncode == 0:
+        vals = {}
+        for line in r.stdout.splitlines():
+            parts = line.split(None, 1)
+            if len(parts) == 2:
+                vals[parts[0]] = parts[1].strip()
+        for k, exp in EXPECTED_PARAMS.items():
+            got = vals.get(k)
+            if got != exp:
+                drift[k] = {'expected': exp, 'actual': got}
+    else:
+        drift = {'_error': r.stderr[:150]}
+    facts['param_drift'] = drift
+    if drift:
+        warnings.append(f'param drift: {drift}')
     return facts
 
 
