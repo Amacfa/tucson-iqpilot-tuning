@@ -6,7 +6,7 @@ Set via `Params().put_bool()` (same API the UI uses) — no file edits, no servi
 |---|---|---|---|
 | `ExperimentalMode` | True | **False** | exits e2e longitudinal — car now follows set speed via `get_cruise_accel` (plan source `cruise`, not `e2e`) — fixes the "won't climb to set speed" |
 | `LongIncrementsEnabled` | False | **True** | hold RES/SET = ±5 mph steps (`LongIncrementHoldStep=5`), tap = ±1 |
-| `IQE2ESetSpeedUseCurrent` | True | **False** | initial set speed no longer pinned to current speed; with `IQE2ESetSpeedMode=1` the engage initial set = fixed `IQE2ESetSpeedMph` (65) |
+| `IQE2ESetSpeedUseCurrent` | True | **False** | **inert while ExperimentalMode=False** — `cruise.py initialize_v_cruise` gates `get_iq_mode_initial_set_speed_kph` on `experimental_mode` (param-read in card.py); with e2e off, engage set speed = `clip(vEgo, 40 kph, max)` = current speed (stock). Would only matter if ExperimentalMode is re-enabled (then initial set = fixed `IQE2ESetSpeedMph`=65, **not** current speed — re-flip UseCurrent first if that's undesired) |
 | `EnableLongComfortMode` | False | **True** | **no-op on this car** — `carControl.longComfortMode` is consumed only by Tesla/VW carcontrollers; the Hyundai path ignores it. Set anyway per approval |
 
 Verification: re-read all four post-write on device — all correct. Full params diff vs
