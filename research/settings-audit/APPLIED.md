@@ -56,3 +56,20 @@ persist across reboot. Re-applied `1` (Standard) via `Params().put`; readback `1
 hourly drift check is clean. If it keeps reverting, suspect the UI writing the last-chosen
 driving mode at boot rather than param loss — recommend the user set Personality =
 Standard in the comma UI once so the UI state agrees.
+
+## Pending — IQGasOverrideBoost (NOT applied, 2026-09-30)
+
+Finding from code (device 3736edc): `longitudinal_planner.py:224–225` —
+`output_a_target_e2e = modelV2.action.desiredAcceleration + accel_boost` — the boost
+(+1.0 m/s² max ramp, `accel_boost.py` ACCEL_BOOST_MAX=1.0, RATE=0.1, ≥10 mph) is added
+**only to the e2e candidate**. `get_accel_candidates` only includes the e2e candidate
+when `is_e2e` is true → **while `ExperimentalMode=False` (current state) the param is a
+complete no-op**, same class as `EnableLongComfortMode`. If e2e is ever re-enabled:
+boost raises the accel request, which feeds `jerk_u_raw` in `HyundaiJerk.make_jerk` —
+the **L1c jerk cap still applies** (`carcontroller.py:803` `jerk_u_raw = clip(1.0+2·(accel−1), base, jerk_max_u)` and `:806` max-vs-mpc; L1c caps the resulting jerk_u).
+
+Apply (when wanted, parked):
+```bash
+p.put_bool('IQGasOverrideBoost', True)
+```
+Rollback: `p.put_bool('IQGasOverrideBoost', False)`

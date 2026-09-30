@@ -1,0 +1,13 @@
+--- a/iqpilot/selfdrive/controls/lib/smooth_stops.py
++++ b/iqpilot/selfdrive/controls/lib/smooth_stops.py
+@@ -9,8 +9,8 @@
+ 
+ STANDSTILL_SPEED = 0.05
+ STANDSTILL_HOLD_SPEED = 0.15
+-SETTLE_DECEL = 0.80
+-TAPER_SPEED = 1.0
++SETTLE_DECEL = 1.00
++TAPER_SPEED = 0.6
+ STOP_KISS_DECEL = 0.25
+ STOP_GAP_MARGIN = 3.0
+ MIN_GAP_BUDGET = 0.5
