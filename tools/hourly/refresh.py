@@ -48,6 +48,8 @@ EXPECTED_PARAMS = {
     'LongIncrementsEnabled': 'True',
     'IQE2ESetSpeedUseCurrent': 'False',
     'EnableLongComfortMode': 'True',
+    'LongitudinalPersonality': '1',
+    'LaneChangeBsd': '1',
 }
 CLOSEOUT = f'{HOME}/analysis/wobble/closeout_v3b.py'
 ATTRIB = f'{HOME}/drives/long3/attribute_long3b.py'

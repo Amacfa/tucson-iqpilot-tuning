@@ -13,6 +13,26 @@ Verification: re-read all four post-write on device — all correct. Full params
 pre-change dump: only the four keys changed (`ModelManager_LastSyncTime` timestamp also moved —
 background bookkeeping, not user-facing).
 
+## Round-2 additions (same session, int-encoded via `Params().put`)
+
+| param | before | after | effect |
+|---|---|---|---|
+| `LongitudinalPersonality` | 2 (aggressive) | **1 (standard)** | `long_mpc.py` T_FOLLOW 1.25→1.45 s, jerk_factor 0.5→1.0 — longer following gap, gentler lead tracking |
+| `LaneChangeBsd` | 0 | **1** | blind-spot veto enabled on auto lane changes |
+
+Post-write re-read verified (`repr`: `1`, `1`). Full params diff vs post-round-1 dump: only
+these two keys changed (plus the `ModelManager_LastSyncTime` timestamp as before).
+
+### Rollback (round 2)
+
+```bash
+cd /data/openpilot && PYTHONPATH=.venv/lib/python3.12/site-packages:. .venv/bin/python -c "
+from iqpilot.common.params import Params; p = Params()
+p.put('LongitudinalPersonality', 2)
+p.put('LaneChangeBsd', 0)
+"
+```
+
 ## Rollback
 
 ```bash
