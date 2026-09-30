@@ -128,3 +128,43 @@ cap — a different bundle would change it, not a param.
 3. Nothing else caps speed: `SpeedLimitController`, `MapCurveSpeedController`,
    `VisionCurveSpeedController`, `SLCSetSpeedToLimit`, `EnableSpeedLimitControl`, predictive SLC —
    all False; `EnableCurvatureController` is a HUD flag only.
+
+## Round 2 — remaining feel-relevant params (post Round-1; verified consumed on the Hyundai path)
+
+Candidates not yet changed, screened for actual consumption in 3736edc code.
+
+### Worth considering
+
+| param | now | code effect (verified) | recommend |
+|---|---|---|---|
+| `LongitudinalPersonality` | 2 (aggressive) | `long_mpc.py`: relaxed=0, standard=1, aggressive=2 → `get_T_FOLLOW`: 1.75/1.45/**1.25 s**; `get_jerk_factor`: 1.0/1.0/**0.5** (aggressive = closer gap AND *higher* jerk weight → actually smoother-per-command but allows tighter following) | **set 1 (standard)** if the car ever feels close/abrupt behind leads — T_FOLLOW 1.25→1.45 s is a real gap change; user's comfort complaint makes standard the safer pick |
+| `IQGasOverrideBoost` | False | `longitudinal_planner.py` AccelBoost: gas held >10 mph ramps accel up to +1.0 m/s², held till disengage, bleeds <10 mph (verified consumer, UI-described) | **keep off for now** — 12 gas overrides/drive suggests user already overrides plenty; boosting makes overrides stronger but riskier; revisit if user says overrides feel weak |
+| `IQLatJerkGain` | 1.0 | `latcontrol_torque.py:290` — scales the jerk-lookahead damping term (`jerk_ahead = LP × _jerk_gain`) | keep 1.0; <1 reduces damping ahead of curves — only touch if entries feel harsh *after* v5 data (a real knob, unlike LongComfortMode) |
+| `LaneChangeBsd` | 0 | consumed in compiled IQ components (iqlocd) — BSM veto of lane changes | **recommend 1** — blind-spot block on auto lane change is a safety win at zero smoothness cost |
+| `IQCustomStopDistance` | 2 | `custom_stop_distance.py` — **only reached via `apply_e2e_stop_distance` → e2e only** | inert now that ExperimentalMode=False; leave |
+| `IQDynamicModelStopTime` | 3.5 | `iq_dynamic` force-stop ramp — force_stop only fires through IQDynamic path (IQDynamicMode=False → conditional-off → likely inert; keep in mind if dynamic mode ever enabled) | leave |
+
+### Keep as-is (verified live but no reason to change)
+
+| param | now | why keep |
+|---|---|---|
+| `IQHkgReducedTorqueFeedback` | True | ×0.8 kp + friction_scale 0.7 — entire v3/H1/v4/v5 tune calibrated on it |
+| `IQLateralAccelSlew` | True | `LateralAccelerationSlewLimiter` — the 3.0 slew cap that also bounds exit unwind; keep |
+| `IQLateralCurvatureLookahead` | False | consumed in controlsd (curvature lookahead into desired path); we already run D1 lookahead — don't stack |
+| `LatSmoothSec` | 13 | iqmodeld → ×0.01 = **0.13 s** path smoothing (real); `ModelLatSmoothSec`=0 off — fine |
+| `DisengageOnAccelerator` | False | selfdrived.py — gas override keeps engagement; **keep False** (safer; user overrides gas often) |
+| `CameraOffset` | 0.0 | leave per lane-bias decision (re-measure on next drive first) |
+| `AutoCruiseControl` / `AutoEngage` / `iqMqbAccResume` | 0/0/False | binary-consumed ACC-resume/auto-engage behaviors — fine off for a commute car |
+| `IQAlertSilence` | False | UI/sound; keep audible alerts |
+
+### Verified no-ops on this car (don't bother)
+
+- `EnableSmoothSteer` (False): `controlsd` gates it on `is_curvature_car` (steerControlType==curvature) — Tucson is torque-type → dead. Same class as LongComfortMode.
+- `EnableLongComfortMode` (now True): no consumer on Hyundai path (Round-1 finding stands).
+- `IQCustomStopDistance`, `IQDynamicModelStopTime`: gated behind e2e/dynamic paths that are now off.
+
+### Round-2 top picks (if the user wants one more change before the drive)
+
+1. **`LongitudinalPersonality` 2 → 1** — biggest live feel knob: following gap 1.25→1.45 s and less aggressive lead tracking; matches the "accurate but comfortable" ask.
+2. **`LaneChangeBsd` 0 → 1** — free safety.
+3. Everything else: keep — the meaningful knobs are either already set (Round-1) or gated/no-op on this car.
