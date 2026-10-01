@@ -53,7 +53,7 @@ this car (Tesla/VW-only and e2e-only respectively) — see [settings audit](rese
 | fix | what | why |
 |---|---|---|
 | **Arming / warning repair** ([package](candidates/arming), [log](candidates/INSTALL_LOG.md)) | `carstate.py` / `card.py` / `behavior.py` / `pandad.cc`: SET/brake permission ordering, MAIN-off command tail, startup ownership before replacement LFA messages exist | reproduced 54/54 rejected commands and the startup LFA gap in isolated replay; caused "won't engage" + LFA warnings |
-| **Fingerprint** ([report](candidates/fingerprint/REPORT.md)) | FW table entry so the Tucson auto-identifies as `HYUNDAI_TUCSON_4TH_GEN` | removes the manual platform selection |
+| **Fingerprint** ([report](candidates/fingerprint/REPORT.md)) — **built, NOT installed** | FW table entry (adds the 99211-CW020 camera FW under `HYUNDAI_TUCSON_4TH_GEN`) so the Tucson can auto-identify | today the platform is forced by the manual `CarPlatformBundle` pick (no FW query; `carFw` empty on every recent drive); the fix only matters if that pick is cleared. Install needs: apply parked, clear the manual pick, one ignition cycle to confirm `fingerprintSource=fw` |
 
 ## Still open / watching
 
