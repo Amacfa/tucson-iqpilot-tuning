@@ -4,7 +4,7 @@ Drives: `0000002f` (12 segs), `00000032` (8 segs); `00000030` = failed-boot atte
 (see ENGAGE_FAILURES.md). Device: latcontrol `db166b61` (v5), controlsd `bbfa1b6e` (D1),
 carcontroller `a8cf776c` (v2), hyundaicanfd `cfd69418` (LFA-AB v0). Active model:
 **KARNBIRRLV2** (index 77 — auto-selected by models_manager, left as-is per user).
-Settings: ExperimentalMode=off, LongitudinalPersonality=1 (but see drift note),
+Settings: ExperimentalMode=off, LongitudinalPersonality=2 (see erratum),
 LongIncrements=on, LaneChangeBsd=on.
 
 ## Engage failures — headline
@@ -66,9 +66,19 @@ accel now chases set speed; capped-frame share fell 0.33→0.019.
 
 ## Drift / housekeeping flags
 
-- **`LongitudinalPersonality` reads 2 again** (applied 1) — flagged by hourly
+- **`LongitudinalPersonality` reads 2** — see erratum: 2 is *relaxed* and correct (not drift)
   param_drift. Either user touched the UI or a setting reset occurred; needs
   re-apply or user confirmation.
 - Route `00000031` rlogs truncated on device (2 segs unrecoverable) — recorded,
   not retried.
 - `active_model` hourly check live: KARNBIRRLV2(77), no warnings.
+
+
+## Erratum (2026-09-30)
+
+This report called `LongitudinalPersonality=2` "aggressive" and described its re-reading
+as param drift after we applied `1`. Both were wrong: the cereal enum is aggressive=0 /
+standard=1 / relaxed=2, so **2 is Relaxed** — the user's intended UI selection — and the
+boot "revert" was the system correctly restoring it. These drives logged
+`selfdriveState.personality=relaxed` on every frame; our re-application of `1` never
+took effect for a drive. See `research/settings-audit/APPLIED.md` erratum.

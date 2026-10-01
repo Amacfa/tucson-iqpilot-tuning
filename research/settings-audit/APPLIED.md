@@ -17,7 +17,7 @@ background bookkeeping, not user-facing).
 
 | param | before | after | effect |
 |---|---|---|---|
-| `LongitudinalPersonality` | 2 (aggressive) | **1 (standard)** | `long_mpc.py` T_FOLLOW 1.25→1.45 s, jerk_factor 0.5→1.0 — longer following gap, gentler lead tracking |
+| ~~`LongitudinalPersonality`~~ | 2 (**relaxed**) | ~~1~~ **ERROR — enum misread** | cereal enum is aggressive=0 / standard=1 / relaxed=2; value 2 was the user's intended Relaxed mode (T_FOLLOW 1.75 s, gentlest). This change is **superseded** — param left at 2; do not re-apply 1 |
 | `LaneChangeBsd` | 0 | **1** | blind-spot veto enabled on auto lane changes |
 
 Post-write re-read verified (`repr`: `1`, `1`). Full params diff vs post-round-1 dump: only
@@ -28,7 +28,7 @@ these two keys changed (plus the `ModelManager_LastSyncTime` timestamp as before
 ```bash
 cd /data/openpilot && PYTHONPATH=.venv/lib/python3.12/site-packages:. .venv/bin/python -c "
 from iqpilot.common.params import Params; p = Params()
-p.put('LongitudinalPersonality', 2)
+p.put('LongitudinalPersonality', 2)   # NB: 2 == relaxed = the user's intended value; rollback also restores 2
 p.put('LaneChangeBsd', 0)
 "
 ```
@@ -48,14 +48,20 @@ p.put_bool('EnableLongComfortMode', False)
 `hourly/refresh.py` now carries `EXPECTED_PARAMS` — any drift on these four is flagged in
 `device_facts.param_drift` and report warnings on every hourly tick.
 
-## Re-application note (2026-09-30, post-L1c/C1 install)
+## Erratum — LongitudinalPersonality enum was misread (2026-09-30)
 
-`LongitudinalPersonality` was found reverted to `2` at the v5-drive ingest (param_drift
-flagged by hourly) and **again after the install reboot** — the value does not appear to
-persist across reboot. Re-applied `1` (Standard) via `Params().put`; readback `1` and the
-hourly drift check is clean. If it keeps reverting, suspect the UI writing the last-chosen
-driving mode at boot rather than param loss — recommend the user set Personality =
-Standard in the comma UI once so the UI state agrees.
+The cereal enum is aggressive=0 / standard=1 / **relaxed=2** — reversed from what this
+document assumed. Value 2 is **Relaxed**, the mode the user actually selected in the UI
+(T_FOLLOW 1.75 s — the longest, gentlest profile). Consequently:
+
+- The repeated "revert to 2" was **not drift**: the UI/car re-writes the user's chosen
+  Relaxed at every boot, correctly restoring 2.
+- Every re-application of `1` (standard) above was an error on our side; the device has
+  now been left at **2** and hourly `EXPECTED_PARAMS` expects `2`.
+- The recommendation to "set Standard in the UI" is withdrawn — the user's UI selection
+  is Relaxed and it persists correctly on its own.
+- All analyzed drives (routes 2f/30/32/33) logged `selfdriveState.personality=relaxed`
+  for every frame — no drive has ever run on standard in this dataset.
 
 ## Pending — IQGasOverrideBoost (NOT applied, 2026-09-30)
 

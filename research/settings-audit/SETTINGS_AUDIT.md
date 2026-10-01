@@ -61,7 +61,7 @@ once can leave v_cruise at ~30; the driver must hold RES/+ to climb (LongIncreme
 | `IQE2ESetSpeedMph` | 65 | fixed initial set when UseCurrent=0 | set to preferred highway speed only if toggling above |
 | `expSpeedConv` | True | allows ≤0.5 m/s² convergence toward set speed in e2e | keep True (off would be worse) |
 | `AlphaLongitudinalEnabled` | True | openpilot controls gas/brake | keep |
-| `LongitudinalPersonality` | 2 (of 0–4) | following distance/mpc weights | lower = closer/shorter gaps; fine as-is |
+| `LongitudinalPersonality` | 2 | cereal enum: aggressive=0, standard=1, **relaxed=2** — current value = Relaxed, the user's chosen mode | leave at 2 (relaxed) — is user's intended setting |
 | `IQDriveProfile` | neutral | drive profile preset | fine |
 | `IQDynamicMode` | False | conditional ACC↔blended switching (all IQDynamicConditional* sub-params configured but inert) | fine off; enabling changes longitudinal character — don't flip casually |
 | `IQForceStops` / `IQDynamicModelStopTime` | True / 3.5 s | model-initiated stops behind lead | keep; raise stop-time only if stops feel premature |
@@ -137,7 +137,7 @@ Candidates not yet changed, screened for actual consumption in 3736edc code.
 
 | param | now | code effect (verified) | recommend |
 |---|---|---|---|
-| `LongitudinalPersonality` | 2 (aggressive) | `long_mpc.py`: relaxed=0, standard=1, aggressive=2 → `get_T_FOLLOW`: 1.75/1.45/**1.25 s**; `get_jerk_factor`: 1.0/1.0/**0.5** (aggressive = closer gap AND *higher* jerk weight → actually smoother-per-command but allows tighter following) | **set 1 (standard)** if the car ever feels close/abrupt behind leads — T_FOLLOW 1.25→1.45 s is a real gap change; user's comfort complaint makes standard the safer pick |
+| `LongitudinalPersonality` | 2 (**relaxed** — enum was misread: cereal is aggressive=0, standard=1, relaxed=2) | `long_mpc.py` `get_T_FOLLOW`: aggressive=1.25 / standard=1.45 / **relaxed=1.75 s**; `get_jerk_factor`: 0.5/1.0/1.0 — relaxed = longest gap, gentlest lead tracking | **leave at 2 (relaxed)** — the earlier "set 1 (standard)" recommendation was based on the reversed enum and is withdrawn |
 | `IQGasOverrideBoost` | False | `longitudinal_planner.py` AccelBoost: gas held >10 mph ramps accel up to +1.0 m/s², held till disengage, bleeds <10 mph (verified consumer, UI-described) | **keep off for now** — 12 gas overrides/drive suggests user already overrides plenty; boosting makes overrides stronger but riskier; revisit if user says overrides feel weak |
 | `IQLatJerkGain` | 1.0 | `latcontrol_torque.py:290` — scales the jerk-lookahead damping term (`jerk_ahead = LP × _jerk_gain`) | keep 1.0; <1 reduces damping ahead of curves — only touch if entries feel harsh *after* v5 data (a real knob, unlike LongComfortMode) |
 | `LaneChangeBsd` | 0 | consumed in compiled IQ components (iqlocd) — BSM veto of lane changes | **recommend 1** — blind-spot block on auto lane change is a safety win at zero smoothness cost |
@@ -165,6 +165,6 @@ Candidates not yet changed, screened for actual consumption in 3736edc code.
 
 ### Round-2 top picks (if the user wants one more change before the drive)
 
-1. **`LongitudinalPersonality` 2 → 1** — biggest live feel knob: following gap 1.25→1.45 s and less aggressive lead tracking; matches the "accurate but comfortable" ask.
+1. ~~`LongitudinalPersonality` 2 → 1~~ — **withdrawn**: enum was reversed; value 2 is *relaxed* (T_FOLLOW 1.75 s, the gentlest profile) and is the user's intended UI selection. Leave at 2.
 2. **`LaneChangeBsd` 0 → 1** — free safety.
 3. Everything else: keep — the meaningful knobs are either already set (Round-1) or gated/no-op on this car.

@@ -7,10 +7,12 @@ drift LongitudinalPersonality expected 1 actual 2]` — see §0.
 ## 0. Personality actually used on the drive
 
 **Measured** (from `selfdriveState.personality` in rlogs, all segs): **`relaxed`**.
-Param on device now reads `2` (aggressive) — reverted at this boot (4th occurrence);
-NOT re-applied per instruction. The drive therefore ran T_FOLLOW 1.75 s / jerk_factor
-1.0 (relaxed) — the most conservative longitudinal profile. Param/UI disagreement
-persists; user should set Standard in the UI once.
+**Erratum**: param value 2 is Relaxed (cereal enum aggressive=0 / standard=1 /
+relaxed=2 — earlier docs had it reversed). Param now reads `2` = Relaxed = the user's
+intended UI selection, restored correctly by the UI at boot — *not* drift. Do not
+re-apply 1. The drive ran T_FOLLOW 1.75 s / jerk_factor 1.0 — the most conservative
+longitudinal profile. Verified `relaxed` on **every** analyzed drive (2f, 30, 32, 33):
+no drive in this dataset has ever run standard.
 
 ## 1. Stops (S1 target)
 
