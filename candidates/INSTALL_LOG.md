@@ -67,3 +67,9 @@ Physical A/B drive remains pending (`physical_validation_pending`).
 
 - 2026-09-24: built `tucson-fingerprint-457ea8e/package` (adds `99211-CW020` fwdCamera FW under `HYUNDAI_TUCSON_4TH_GEN`; in stock 457ea8e it exists only under `HYUNDAI_SANTA_CRUZ_1ST_GEN`). Baseline fingerprints.py verified byte-identical on device (`dd31c382`, both paths). Local tests: artifacts hashes + patch roundtrip + py_compile all true; manage guards all true.
 - Staged at `/data/tucson_stage/fingerprint-457ea8e/package/`; `--check` → `{"check_passed": true, "changes_made": false, "head": "457ea8e2d33eb3f48f5805b35e6dff9a046c312c"}`. **NOT applied** — readiness `check_only`; physical parked fingerprintSource="fw" check pending.
+
+## M1 MAIN-button no-disarm (3736edc)
+
+- 2026-10-01: built `tucson-mainbtn-3736edc-M1/package` (behavior.py: guarded Tucson MAIN press -> `alcDisengaged` only, never `alcEngaged`, no kill_all; carstate.py both paths: MAIN release no longer toggles `main_enabled` off when the Tucson release gate is active, MAIN-press latch removed; SET/RES arming unchanged; panda safety unchanged). Local tests: `validation/test_m1.py` all true; artifacts hashes + patch roundtrip + py_compile true; manage guards 7/7.
+- Staged at `/data/tucson-packages/M1/package/`; `--check` -> `{"check_passed": true, "changes_made": false, "head": "3736edc..."}`.
+- **Applied** (user-approved) -> `{"completed": "apply", "backup": "/data/iq-warning-backups/20261001T222228.073696Z-apply", "services_restarted": false}`; `--verify-installed` -> `{"installed_and_running_verified": true, "physical_test_pending": true}`. On-device hashes: behavior.py `6c19eded9810`, carstate.py `ab334ec36480` (both paths). Physical check pending: MAIN press while engaged must leave long running + cruiseState.available true; next SET re-engages lateral.
