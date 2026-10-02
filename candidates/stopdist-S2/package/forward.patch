@@ -1,0 +1,11 @@
+--- a/iqpilot/selfdrive/controls/lib/longitudinal_mpc_lib/long_mpc.py
++++ b/iqpilot/selfdrive/controls/lib/longitudinal_mpc_lib/long_mpc.py
+@@ -53,7 +53,7 @@
+ FCW_IDXS = T_IDXS < 5.0
+ T_DIFFS = np.diff(T_IDXS, prepend=[0.])
+ COMFORT_BRAKE = 2.5
+-STOP_DISTANCE = 3.0
++STOP_DISTANCE = 4.0
+ MIN_X_LEAD_FACTOR = 0.5
+ LEAD_PULLAWAY_VREL = 0.5
+ LEAD_PULLAWAY_ABRAKE = -0.5

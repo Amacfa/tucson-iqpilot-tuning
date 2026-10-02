@@ -1,0 +1,22 @@
+--- a/.venv/lib/python3.12/site-packages/iqdbc/car/hyundai/carcontroller.py
++++ b/.venv/lib/python3.12/site-packages/iqdbc/car/hyundai/carcontroller.py
+@@ -133,10 +133,6 @@
+ 
+   cmd_sw = cmd_rw * steer_ratio
+   return float(np.clip(cmd_sw, -steer_sw_max_deg, steer_sw_max_deg))
+-
+-# Cap on the acceleration request while the wheels are still held at standstill; the jerk ramp
+-# takes over once the car is rolling.
+-LAUNCH_HOLD_ACCEL_MAX = 1.0
+ 
+ class CarController(CarControllerBase):
+   def __init__(self, dbc_names, CP, CP_IQ=None):
+@@ -415,8 +411,6 @@
+ 
+     # accel + longitudinal
+     accel = float(np.clip(actuators.accel, CarControllerParams.ACCEL_MIN, CarControllerParams.ACCEL_MAX))
+-    if CS.out.standstill:
+-      accel = min(accel, LAUNCH_HOLD_ACCEL_MAX)
+     stopping = actuators.longControlState == LongCtrlState.stopping
+     set_speed_in_units = hud_control.setSpeed * (CV.MS_TO_KPH if CS.is_metric else CV.MS_TO_MPH)
+ 
