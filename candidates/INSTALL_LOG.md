@@ -10,6 +10,11 @@ from `/data/tucson_stage/` with the device venv python.
 - **2026-09-24 07:40:05Z** — tune package `--apply`
   (backup `/data/iq-warning-backups/20260924T074005.858580Z-apply`)
 - Reboot after both applies.
+- **Correction (added 2026-10-02):** the following packages were also applied and are
+  live on device — C1 (cruise.py `1abb8a1e`) applied 2026-09-30T20:43Z, S1
+  (smooth_stops.py `9da88dc0`) applied 2026-09-30T22:13Z, A3
+  (longitudinal_planner.py `d6abce2e`) applied 2026-10-01T06:18Z. Earlier notes calling
+  C1 "not installed" were wrong.
 
 ## Post-reboot verification
 

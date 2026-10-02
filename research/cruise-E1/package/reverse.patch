@@ -1,0 +1,114 @@
+--- b/iqpilot/selfdrive/car/cruise.py
++++ a/iqpilot/selfdrive/car/cruise.py
+@@ -196,9 +196,6 @@
+ V_CRUISE_UNSET = 255
+ V_CRUISE_INITIAL = 40
+ V_CRUISE_INITIAL_EXPERIMENTAL_MODE = 105
+-# Engage always adopts the current speed (rounded to the 5 mph/5 kph step, floor 25 mph) - same result for SET, RES, + and -.
+-IQ_ENGAGE_AT_CURRENT_SPEED = True
+-ENGAGE_FLOOR_KPH = 40.0
+ IMPERIAL_INCREMENT = round(CV.MPH_TO_KPH, 1)
+ 
+ ButtonEvent = car.CarState.ButtonEvent
+@@ -229,7 +226,6 @@
+     self._slc_accel_held = False
+     self._slc_accel_release_frames = 0
+     self._slc_pcm_speed_last = None
+-    self._is_metric = False
+ 
+   def _update_slc_accel_gesture(self, CS):
+     self._slc_accel_release_frames = max(0, self._slc_accel_release_frames - 1)
+@@ -263,7 +259,6 @@
+     return self.CP.brand == "volkswagen" and self.CP.openpilotLongitudinalControl and not self.CP.pcmCruise
+ 
+   def update_v_cruise(self, CS, enabled, is_metric):
+-    self._is_metric = is_metric
+     self.v_cruise_kph_last = self.v_cruise_kph
+     self._update_slc_accel_gesture(CS)
+ 
+@@ -352,14 +347,6 @@
+     if self.CP.pcmCruise:
+       return
+ 
+-    if IQ_ENGAGE_AT_CURRENT_SPEED:
+-      step_kph = 5.0 if self._is_metric else 5.0 * CV.MPH_TO_KPH
+-      v_kph = max(CS.vEgo * CV.MS_TO_KPH, ENGAGE_FLOOR_KPH)
+-      v_kph = round(v_kph / step_kph) * step_kph
+-      self.v_cruise_kph = float(np.clip(round(v_kph, 1), self.v_cruise_min, V_CRUISE_MAX))
+-      self.v_cruise_cluster_kph = self.v_cruise_kph
+-      return
+-
+     set_pressed = any(b.type in (ButtonType.decelCruise, ButtonType.setCruise) for b in CS.buttonEvents)
+     resume_pressed = any(b.type in (ButtonType.accelCruise, ButtonType.resumeCruise) for b in CS.buttonEvents)
+ 
+--- b/iqpilot/selfdrive/controls/lib/longitudinal_planner.py
++++ a/iqpilot/selfdrive/controls/lib/longitudinal_planner.py
+@@ -25,10 +25,6 @@
+ A_CRUISE_MAX_BP = [0., 10.0, 25., 40.]
+ A_CRUISE_MIN = -1.2
+ J_CRUISE = 1.0
+-E2E_TURN_ACCEL_FLOOR = 0.3  # m/s^2 kept available while turning hard in e2e mode
+-SET_DROP_COAST_GAP = 4.5    # m/s above the set speed: coast, don't brake
+-SET_DROP_COAST_ACCEL = -0.5
+-SET_DROP_COAST_TIME = 5.0   # s after the set speed is lowered during which the coast floor applies
+ CONTROL_N_T_IDX = ModelConstants.T_IDXS[:CONTROL_N]
+ ALLOW_THROTTLE_THRESHOLD = 0.4
+ MIN_ALLOW_THROTTLE_SPEED = 2.5
+@@ -68,12 +64,11 @@
+ def get_cruise_accel(e2e, v_cruise, v_ego, a_cruise_prev, angle_steers, CP, dt, accel_coast, allow_throttle):
+   max_accel = ACCEL_MAX if e2e else get_max_accel(v_ego)
+ 
+-  a_total_max = np.interp(v_ego, _A_TOTAL_MAX_BP, _A_TOTAL_MAX_V)
+-  a_y = v_ego ** 2 * angle_steers * CV.DEG_TO_RAD / (CP.steerRatio * CP.wheelbase)
+-  a_x_allowed = math.sqrt(max(a_total_max ** 2 - a_y ** 2, 0.))
+-  if e2e:
+-    a_x_allowed = max(a_x_allowed, E2E_TURN_ACCEL_FLOOR)
+-  max_accel = min(max_accel, a_x_allowed)
++  if not e2e:
++    a_total_max = np.interp(v_ego, _A_TOTAL_MAX_BP, _A_TOTAL_MAX_V)
++    a_y = v_ego ** 2 * angle_steers * CV.DEG_TO_RAD / (CP.steerRatio * CP.wheelbase)
++    a_x_allowed = math.sqrt(max(a_total_max ** 2 - a_y ** 2, 0.))
++    max_accel = min(max_accel, a_x_allowed)
+   if not allow_throttle:
+     clipped_accel_coast = max(accel_coast, ACCEL_MIN)
+     coast_limit = np.interp(v_ego, [MIN_ALLOW_THROTTLE_SPEED, MIN_ALLOW_THROTTLE_SPEED*2], [max_accel, clipped_accel_coast])
+@@ -135,8 +130,6 @@
+     self.launch_armed = False
+     self.prev_e2e = False
+     self.mode_blend_timer = 0.0
+-    self._set_drop_timer = 0.0
+-    self._v_cruise_prev = 0.0
+     try:
+       self.exp_speed_conv = Params().get_bool("expSpeedConv")
+     except UnknownKeyName:
+@@ -201,7 +194,6 @@
+       self.v_desired_filter.x = v_ego
+       self.a_desired = np.clip(sm['carState'].aEgo, ACCEL_MIN, ACCEL_MAX)
+       self.a_cruise = self.a_desired
+-      self._set_drop_timer = 0.0
+ 
+     self.v_desired_filter.x = max(0.0, self.v_desired_filter.update(v_ego))
+     _, model_v, model_a, _, throttle_prob = self.parse_model(sm['modelV2'])
+@@ -215,11 +207,6 @@
+     self.mpc.set_cur_state(self.v_desired_filter.x, self.a_desired)
+     self.mpc.update(sm['modelV2'], sm['radarState'], personality=personality)
+     v_cruise = LongitudinalPlannerIQ.update_targets(self, sm, self.v_desired_filter.x, v_cruise)
+-
+-    if v_cruise < self._v_cruise_prev - 0.1 and self._v_cruise_prev > 0.0:
+-      self._set_drop_timer = SET_DROP_COAST_TIME
+-    self._v_cruise_prev = v_cruise
+-    self._set_drop_timer = max(self._set_drop_timer - self.dt, 0.0)
+ 
+     self.v_desired_trajectory = np.interp(CONTROL_N_T_IDX, T_IDXS_MPC, self.mpc.v_solution)
+     self.a_desired_trajectory = np.interp(CONTROL_N_T_IDX, T_IDXS_MPC, self.mpc.a_solution)
+@@ -284,10 +271,6 @@
+ 
+     self.output_should_stop = self.output_should_stop or self.forcing_stop
+ 
+-    if (e2e and self._set_drop_timer > 0.0 and not self.mpc.status and not self.output_should_stop
+-        and not self.fcw and 0.0 < v_ego - v_cruise < SET_DROP_COAST_GAP):
+-      output_a_target = max(output_a_target, SET_DROP_COAST_ACCEL)
+-
+     if e2e != self.prev_e2e:
+       self.mode_blend_timer = MODE_BLEND_MAX_TIME
+     self.prev_e2e = e2e
