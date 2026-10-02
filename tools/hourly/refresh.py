@@ -32,6 +32,7 @@ MANIFESTS = [
     ('tune-v2', f'{HOME}/analysis/tucson-tune-3736edc-v2/package/manifest.json'),
     ('lfa-ab', f'{HOME}/analysis/tucson-lfa-ab-3736edc/package/manifest.json'),
     ('arming', f'{HOME}/analysis/tucson-warning-arming-3736edc/package/manifest.json'),
+    ('M1', f'{HOME}/analysis/tucson-mainbtn-3736edc-M1/package/manifest.json'),
 ]
 CANDIDATE_ONLY = [  # report presence only (L1c/C1 never installed; v3/H1/D1 installed 2026-09-29)
     ('tune-v3', f'{HOME}/analysis/tucson-tune-3736edc-v3/package/manifest.json'),
@@ -46,11 +47,11 @@ CANDIDATE_ONLY = [  # report presence only (L1c/C1 never installed; v3/H1/D1 ins
 ]
 # expected device params (settings applied 2026-09-30, user-approved); drift is flagged in facts
 EXPECTED_PARAMS = {
-    'ExperimentalMode': 'False',
+    'ExperimentalMode': 'True',
     'LongIncrementsEnabled': 'True',
     'IQE2ESetSpeedUseCurrent': 'False',
     'EnableLongComfortMode': 'True',
-    'LongitudinalPersonality': '2',
+    'LongitudinalPersonality': '1',
     'LaneChangeBsd': '1',
 }
 CLOSEOUT = f'{HOME}/analysis/wobble/closeout_v3b.py'
