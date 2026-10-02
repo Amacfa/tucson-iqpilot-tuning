@@ -24,7 +24,7 @@ The ~0.5 s long-hold that toggles Experimental Mode is a separate code path —
 unchanged. All other params unchanged.
 
 ## Status
-**NOT installed — offline candidate only** (`readiness: check_only`).
+**INSTALLED 2026-10-02T04:01Z** (user-approved; `--verify-installed` passed — see `../INSTALL_LOG.md`). `physical_test_pending`.
 Independent of M1/L2/S2 (different file; no shared dependencies).
 Rollback restores `68aa63da` exactly (`manage.py --rollback`, parked only).
 

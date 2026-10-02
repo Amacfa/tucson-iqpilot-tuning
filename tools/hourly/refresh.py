@@ -33,6 +33,7 @@ MANIFESTS = [
     ('lfa-ab', f'{HOME}/analysis/tucson-lfa-ab-3736edc/package/manifest.json'),
     ('arming', f'{HOME}/analysis/tucson-warning-arming-3736edc/package/manifest.json'),
     ('M1', f'{HOME}/analysis/tucson-mainbtn-3736edc-M1/package/manifest.json'),
+    ('P1', f'{HOME}/analysis/tucson-personality-3736edc-P1/package/manifest.json'),
 ]
 CANDIDATE_ONLY = [  # report presence only (L1c/C1 never installed; v3/H1/D1 installed 2026-09-29)
     ('tune-v3', f'{HOME}/analysis/tucson-tune-3736edc-v3/package/manifest.json'),

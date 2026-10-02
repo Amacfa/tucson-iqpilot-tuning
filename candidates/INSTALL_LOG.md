@@ -83,3 +83,8 @@ Physical A/B drive remains pending (`physical_validation_pending`).
 
 - 2026-10-02: built `tucson-stopdist-3736edc-S2/package` (`iqpilot/selfdrive/controls/lib/longitudinal_mpc_lib/long_mpc.py`: `STOP_DISTANCE 3.0 -> 4.0`; base stock `2b6c5057`; independent of other packages). Local tests: `validation/test_s2.py` all true; artifacts + manage all true.
 - **Applied** (user-approved, "Yes, install both") at 2026-10-02T03:16Z -> `{"completed": "apply", "backup": "/data/iq-warning-backups/20261002T031600.846237Z-apply", "services_restarted": false}`; `--verify-installed` passed. On-device hash: `b0c92a1ff212022be0506bad3f99675dcadf3669aadb66b2c8d73e4cbc56fb32`. Physical check pending: stopped-lead gaps ~+1.0 m vs the measured 1.8-3.0 m.
+
+## P1 personality button fix (3736edc)
+
+- 2026-10-02: built `tucson-personality-3736edc-P1/package` (`iqpilot/selfdrive/selfdrived/selfdrived.py`: `put_nonblocking` -> `put` on the gapAdjustCruise personality write, so the 100 ms params_thread re-read can no longer win the race and snap the value back). Local tests: `validation/test_p1.py` all true (deferred-write race sim: rollback reverts, candidate sticks; cycle 1->0->2->1); artifacts hashes + patch roundtrip + py_compile true; manage guards 7/7.
+- **Applied** (user-approved, "Yes install that") at 2026-10-02T04:01Z -> `{"completed": "apply", "backup": "/data/iq-warning-backups/20261002T040118.183399Z-apply", "services_restarted": false}`; `--verify-installed` passed. On-device hash: `edf2fbee72d1541f50eb6c6c7654143fbecc0a6335910ce5e41a4d4b0dab457e`. Physical check pending: a distance-button press should cycle Standard->Aggressive->Relaxed->Standard instead of always showing Aggressive.
