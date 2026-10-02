@@ -1,0 +1,103 @@
+--- b/iqpilot/selfdrive/controls/lib/latcontrol_torque.py
++++ a/iqpilot/selfdrive/controls/lib/latcontrol_torque.py
+@@ -501,16 +501,6 @@
+ LAT_ACCEL_FACTOR_SPEED_TABLE = {
+   "HYUNDAI_TUCSON_4TH_GEN": ([8.0, 12.0, 15.0, 25.0], [2.95, 3.45, 4.05, 4.05]),
+ }
+-# v6: independently switchable per-car knobs. Unlisted cars take the exact pre-patch path.
+-LAT_TUNE_V6 = {
+-  "HYUNDAI_TUCSON_4TH_GEN": {
+-    "split_ff_fb": True,
+-    # same breakpoints/values as the schedule -> P/I torque unchanged (lever wired, neutral)
+-    "fb_lat_accel_factor_speed": ([8.0, 12.0, 15.0, 25.0], [2.95, 3.45, 4.05, 4.05]),
+-    "handback": {"blend_s": 0.25, "fric_reset_on_reversal": True},
+-    "timing": {"lat_delay_tau": 0.0, "fractional_delay": False},
+-  },
+-}
+ class LatControlTorque(LatControl):
+   supports_legacy_curvature_lookahead = True
+ 
+@@ -541,14 +531,6 @@
+     self.lateral_acceleration_slew_limiter = LateralAccelerationSlewLimiter(Params().get_bool("IQLateralAccelSlew"))
+     self.lat_accel_factor_speed_table = LAT_ACCEL_FACTOR_SPEED_TABLE.get(str(CP.carFingerprint))
+ 
+-    self.v6 = LAT_TUNE_V6.get(str(CP.carFingerprint))
+-    if self.v6 is not None:
+-      self._fb_torque_params = CP.lateralTuning.torque.as_builder()
+-      self._fb_torque_params.latAccelFactor = self.torque_params.latAccelFactor
+-      self._lat_delay_lp = FirstOrderFilter(0.0, self.v6["timing"].get("lat_delay_tau", 0.0), self.dt)
+-      self._hb_elapsed = None
+-      self._sp_sign = 0.0
+-
+     self.nnff_assist = NeuralNetworkFeedForward(self, CP, CP_IQ, CI)
+ 
+   def update_live_torque_params(self, latAccelFactor, latAccelOffset, friction):
+@@ -583,16 +565,8 @@
+     curvature_deadzone = abs(VM.calc_curvature(math.radians(self.steering_angle_deadzone_deg), CS.vEgo, 0.0))
+     lateral_accel_deadzone = curvature_deadzone * CS.vEgo ** 2
+ 
+-    if self.v6 is not None and self.v6["timing"].get("lat_delay_tau"):
+-      lat_delay = self._lat_delay_lp.update(lat_delay)
+-    delay_f = np.clip(lat_delay / self.dt + 1, 1, self.lat_accel_request_buffer_len)
+-    delay_frames = int(delay_f)
+-    if self.v6 is not None and self.v6["timing"].get("fractional_delay"):
+-      older = self.lat_accel_request_buffer[-delay_frames]
+-      newer = self.lat_accel_request_buffer[min(-delay_frames + 1, -1)]
+-      expected_lateral_accel = older + (delay_f - delay_frames) * (newer - older)
+-    else:
+-      expected_lateral_accel = self.lat_accel_request_buffer[-delay_frames]
++    delay_frames = int(np.clip(lat_delay / self.dt + 1, 1, self.lat_accel_request_buffer_len))
++    expected_lateral_accel = self.lat_accel_request_buffer[-delay_frames]
+     setpoint = expected_lateral_accel
+     if self.setpoint_lead_enabled:
+       request_ramp_rate = (future_desired_lateral_accel - expected_lateral_accel) / max(lat_delay, self.dt)
+@@ -605,30 +579,11 @@
+     gravity_adjusted_future_lateral_accel = future_desired_lateral_accel - roll_compensation
+     ff = gravity_adjusted_future_lateral_accel
+     ff -= self.torque_params.latAccelOffset
+-    fric_gain = 1.0
+-    hb = self.v6.get("handback") if self.v6 is not None else None
+-    if hb:
+-      if CS.steeringPressed:
+-        self._fric_err_lp = 0.0
+-        self._hb_elapsed = 0.0
+-        fric_gain = 0.0
+-      elif self._hb_elapsed is not None:
+-        self._hb_elapsed += self.dt
+-        fric_gain = min(1.0, self._hb_elapsed / hb["blend_s"])
+-        if fric_gain >= 1.0:
+-          self._hb_elapsed = None
+-      if hb.get("fric_reset_on_reversal") and abs(setpoint) > lateral_accel_deadzone:
+-        s = float(np.sign(setpoint))
+-        if self._sp_sign != 0.0 and s != self._sp_sign:
+-          self._fric_err_lp = 0.0
+-        self._sp_sign = s
+     self._fric_err_lp += (error - self._fric_err_lp) * self.dt / 0.3
+-    ff += fric_gain * self.friction_scale * get_friction(self._fric_err_lp + JERK_GAIN * desired_lateral_jerk, lateral_accel_deadzone,
+-                                                         FRICTION_THRESHOLD, self.torque_params)
++    ff += self.friction_scale * get_friction(self._fric_err_lp + JERK_GAIN * desired_lateral_jerk, lateral_accel_deadzone,
++                                            FRICTION_THRESHOLD, self.torque_params)
+ 
+     if not active:
+-      if self.v6 is not None and self.v6.get("handback"):
+-        self._fric_err_lp = 0.0
+       output_torque = 0.0
+       pid_log.active = False
+     else:
+@@ -638,15 +593,7 @@
+       kp_scale = float(np.interp(CS.vEgo, [13.0, 17.0], [0.7, 0.6]))
+       self.pid._k_p = [self._kp_base[0], [k * kp_scale for k in self._kp_base[1]]]
+       output_lataccel = self.pid.update(pid_log.error, speed=CS.vEgo, feedforward=ff, freeze_integrator=freeze_integrator)
+-      if self.v6 is not None and self.v6.get("split_ff_fb"):
+-        # subtract ff after the PID limit clip so total stays bounded as today
+-        fb_lataccel = output_lataccel - ff
+-        if "fb_lat_accel_factor_speed" in self.v6:
+-          self._fb_torque_params.latAccelFactor = float(np.interp(CS.vEgo, *self.v6["fb_lat_accel_factor_speed"]))
+-        output_torque = (self.torque_from_lateral_accel(ff, self.torque_params)
+-                         + self.torque_from_lateral_accel(fb_lataccel, self._fb_torque_params))
+-      else:
+-        output_torque = self.torque_from_lateral_accel(output_lataccel, self.torque_params)
++      output_torque = self.torque_from_lateral_accel(output_lataccel, self.torque_params)
+ 
+       pid_log, output_torque = self.nnff_assist.update(CS, VM, self.pid, params, ff, pid_log, setpoint, measurement, calibrated_pose, roll_compensation,
+                                                        future_desired_lateral_accel, measurement, lateral_accel_deadzone, gravity_adjusted_future_lateral_accel,
