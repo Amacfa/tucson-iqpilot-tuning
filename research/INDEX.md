@@ -1,16 +1,3 @@
-# Topics
-
-- [tune-v6-handback](tune-v6-handback/) — hand-back friction reset (B); ff/fb split wired neutral (A); timing off (C). Offline, not installed.
-
 # Hourly research reports
 
-- [20260928T044855Z](hourly-reports/20260928T044855Z.md)
-- [20260928T185314Z](hourly-reports/20260928T185314Z.md)
-- [20260928T212709Z](hourly-reports/20260928T212709Z.md)
-- [20260930T023552Z](hourly-reports/20260930T023552Z.md)
-- [20260930T201209Z](hourly-reports/20260930T201209Z.md)
-- [20261001T020145Z](hourly-reports/20261001T020145Z.md)
-- [20261001T054848Z](hourly-reports/20261001T054848Z.md)
-- [20261001T203456Z](hourly-reports/20261001T203456Z.md)
-- [20261002T015011Z](hourly-reports/20261002T015011Z.md)
-- [20261002T032351Z](hourly-reports/20261002T032351Z.md)
+- [20261002T191733Z](20261002T191733Z.md)
