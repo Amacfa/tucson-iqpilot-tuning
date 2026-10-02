@@ -44,6 +44,8 @@ CANDIDATE_ONLY = [  # report presence only (L1c/C1 never installed; v3/H1/D1 ins
     ('C1', f'{HOME}/analysis/tucson-setspeed-3736edc-C1/package/manifest.json'),
     ('S1', f'{HOME}/analysis/tucson-tune-3736edc-S1/package/manifest.json'),
     ('A3', f'{HOME}/analysis/tucson-tune-3736edc-A3/package/manifest.json'),
+    ('L2', f'{HOME}/analysis/tucson-launch-3736edc-L2/package/manifest.json'),
+    ('S2', f'{HOME}/analysis/tucson-stopdist-3736edc-S2/package/manifest.json'),
 ]
 # expected device params (settings applied 2026-09-30, user-approved); drift is flagged in facts
 EXPECTED_PARAMS = {

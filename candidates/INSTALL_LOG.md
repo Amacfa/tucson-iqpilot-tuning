@@ -73,3 +73,13 @@ Physical A/B drive remains pending (`physical_validation_pending`).
 - 2026-10-01: built `tucson-mainbtn-3736edc-M1/package` (behavior.py: guarded Tucson MAIN press -> `alcDisengaged` only, never `alcEngaged`, no kill_all; carstate.py both paths: MAIN release no longer toggles `main_enabled` off when the Tucson release gate is active, MAIN-press latch removed; SET/RES arming unchanged; panda safety unchanged). Local tests: `validation/test_m1.py` all true; artifacts hashes + patch roundtrip + py_compile true; manage guards 7/7.
 - Staged at `/data/tucson-packages/M1/package/`; `--check` -> `{"check_passed": true, "changes_made": false, "head": "3736edc..."}`.
 - **Applied** (user-approved) -> `{"completed": "apply", "backup": "/data/iq-warning-backups/20261001T222228.073696Z-apply", "services_restarted": false}`; `--verify-installed` -> `{"installed_and_running_verified": true, "physical_test_pending": true}`. On-device hashes: behavior.py `6c19eded9810`, carstate.py `ab334ec36480` (both paths). Physical check pending: MAIN press while engaged must leave long running + cruiseState.available true; next SET re-engages lateral.
+
+## L2 launch standstill cap (3736edc)
+
+- 2026-10-02: built `tucson-launch-3736edc-L2/package` (`.venv/.../iqdbc/car/hyundai/carcontroller.py`: `LAUNCH_HOLD_ACCEL_MAX = 1.0` caps the accel request while `CS.out.standstill`; base = installed L1c `d3915221`). Local tests: `validation/test_l2.py` all true; artifacts hashes + patch roundtrip + py_compile true; manage guards 7/7.
+- **Applied** (user-approved, "Yes, install both") at 2026-10-02T03:16Z -> `{"completed": "apply", "backup": "/data/iq-warning-backups/20261002T031622.006662Z-apply", "services_restarted": false}`; `--verify-installed` passed. On-device hash: `5a03012c216cc0ef7e02593e970b5cf7c856b2f0e08b221d662b03fafd419af6`. Physical check pending: brake-release launches should peak ~2.0-2.3 m/s^2 vs the measured 2.6-3.8.
+
+## S2 stopped-lead distance (3736edc)
+
+- 2026-10-02: built `tucson-stopdist-3736edc-S2/package` (`iqpilot/selfdrive/controls/lib/longitudinal_mpc_lib/long_mpc.py`: `STOP_DISTANCE 3.0 -> 4.0`; base stock `2b6c5057`; independent of other packages). Local tests: `validation/test_s2.py` all true; artifacts + manage all true.
+- **Applied** (user-approved, "Yes, install both") at 2026-10-02T03:16Z -> `{"completed": "apply", "backup": "/data/iq-warning-backups/20261002T031600.846237Z-apply", "services_restarted": false}`; `--verify-installed` passed. On-device hash: `b0c92a1ff212022be0506bad3f99675dcadf3669aadb66b2c8d73e4cbc56fb32`. Physical check pending: stopped-lead gaps ~+1.0 m vs the measured 1.8-3.0 m.
