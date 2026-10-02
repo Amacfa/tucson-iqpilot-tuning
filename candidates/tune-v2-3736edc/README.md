@@ -1,3 +1,5 @@
+> Superseded by candidates/tune (v5 table). Kept for history.
+
 # Tucson steering/longitudinal tune (A2 + B + L1) for release-candidate 0b8c190c
 
 Three candidate files and three originals for rollback, pinned to IQ 0b8c190c59637d10ccd76525f6685c7d3b964264.

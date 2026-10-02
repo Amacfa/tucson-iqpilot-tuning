@@ -84,21 +84,23 @@ and the opener script. The LFA-AB hyundaicanfd variant switch was excluded
 - One self-clearing `accFaulted` event — watching for repeats.
 - Boot: CAN settle takes 10–30 s; engaging before the UI says ready gives a transient fault.
 
-## Layout
+## Layout — start here
 
-- `reports/` — drive-log analysis reports (`REPORT.md`, `DEEP_RESEARCH.md`) and the
-  arming-package README/BUILD_NOTES.
-- `scripts/` — analysis and export scripts used to build the frame dataset
-  (`export_drive_summary.py`, `analyze_*.py`, `build_long.py`) and the route23
-  isolated replay tooling under `scripts/route23/`.
-- `candidates/arming/` — guarded install package (manifest, manage.py, forward/reverse
-  patches) for the arming/warning repair at 0b8c190c. `software_validation_passed`
-  is false pending the isolated route23 runtime replay.
-- `candidates/tune/` — guarded install package for the steering/longitudinal tune
-  (speed-scheduled latAccelFactor + measurement low-pass, CAN-FD jerk_u floor/boost,
-  friction 0.108745 -> 0.12). Must be applied after the arming package.
-- `candidates/fingerprint/` — the CW020 camera fingerprint candidate patch and its
-  notes (patch/diff and report only).
+- `README.md` — what's installed, what changed and why, and the upstream PRs.
+- `candidates/` — install packages; read `candidates/INSTALL_LOG.md` first for
+  what is actually on the car. One folder per package:
+  `arming/` (warning/arming repair), `tune/` (v5 steering table),
+  `launch-L2/`, `stopdist-S2/`, `personality-P1/`, `mainbtn-M1/`,
+  `fingerprint/` (built, not installed), `tune-v2-3736edc/` (superseded).
+- `research/` — per-topic analysis folders; `INDEX.md` lists them, and
+  `hourly-reports/` holds the archived hourly check digests.
+- `reports/` — early drive-log analysis reports (`REPORT.md`, `DEEP_RESEARCH.md`)
+  and the arming-package README/BUILD_NOTES.
+- `scripts/` — analysis and export scripts (`export_drive_summary.py`,
+  `analyze_*.py`, `build_long.py`) and the route23 replay tooling under
+  `scripts/route23/`.
+- `tools/hourly/` — the hourly check scripts; automation is now stopped.
+- `upstream/` — record of the eight PRs opened on Teal's IQ.Pilot.
 
 ## Safety notes
 
