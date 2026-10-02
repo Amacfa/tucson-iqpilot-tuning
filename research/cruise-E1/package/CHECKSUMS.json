@@ -4,7 +4,7 @@
   "candidate/iqpilot/selfdrive/controls/lib/longitudinal_planner.py": "33788391e05af5429f8ac5cdab19947ed9aec2a374766f7dc6d16271604f24ae",
   "forward.patch": "35c730bbc71efe8b1bf7ed7e1a2f872f8e081ef5a013c4e257628fdd6957f240",
   "manage.py": "1f1ee800d83362472f9de0a868a36e528bec9da691e9542a7cc9c32ccd0ea3a6",
-  "manifest.json": "a1b1b9b3f796596a784d9aa1d647ff21bb5ce35081bb2b3b7a689f55c721c87b",
+  "manifest.json": "a38246f9de2091b2f90360895604ed7a5a7c8430b7ac460f0c2741063680a675",
   "reverse.patch": "334f2afc7661c3cc199e458cac35d80c4ade47db7e78eb097c27eb6cfe364f09",
   "rollback/iqpilot/selfdrive/car/cruise.py": "1abb8a1e00c3a301d54d07ceb2a2fcf80777a0337507d63a405b3a7d4328e940",
   "rollback/iqpilot/selfdrive/controls/lib/longitudinal_planner.py": "d6abce2e969ed27399e71355f962a34e97281da75182140a8e82f80283b75a18",

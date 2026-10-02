@@ -78,15 +78,14 @@
     "iqpilot/cereal/libsocketmaster.a": "045f3765f3a9368af9ce811b3829debe8834a40af650c2c401f0d671ea64f5db",
     "iqpilot/cereal/libcereal.a": "aec782c5c46705206673ba379c719fbb3123c404ab89148b08e0c6048f8c0b10",
     ".venv/lib/python3.12/site-packages/msgq/libmsgq.a": "8e3ef6482a4c470f37288cb05c821a7a8b69ebd1bc9a68fa01da6a8e76a29786",
-    ".venv/lib/python3.12/site-packages/iqdbc/car/hyundai/carcontroller.py": "d39152216200edd025ea2041e259f4227fd7bc6cec0ce150b208a5b1e8b455e7",
-    "iqpilot/selfdrive/car/cruise.py": "1abb8a1e00c3a301d54d07ceb2a2fcf80777a0337507d63a405b3a7d4328e940",
-    "iqpilot/selfdrive/controls/lib/latcontrol_torque.py": "db166b619dc40ddb49ace8aa4dcde41426fda3a79fa5593258a7639b80e90b7e",
+    ".venv/lib/python3.12/site-packages/iqdbc/car/hyundai/carcontroller.py": "5a03012c216cc0ef7e02593e970b5cf7c856b2f0e08b221d662b03fafd419af6",
+    "iqpilot/selfdrive/controls/lib/latcontrol_torque.py": "0b6d5cf312706aeedbbee6fec2bf4fe02e584afa46f351b5b6668a31dffce102",
     "iqpilot/selfdrive/controls/lib/smooth_stops.py": "9da88dc07b34506cbd294db79fe43cf90e4bba0eefa0c39b953175c2ac5dd4c7"
   },
   "known_remaining_issue": "Larger cruise accel requests at 15-25 m/s; SCC shaping unchanged (J_CRUISE 1.0 still applies). Rollback restores stock constants.",
   "readiness": "check_only",
   "installed": false,
-  "rebase_note": "Bases: cruise.py=C1 candidate 1abb8a1e (installed); longitudinal_planner.py=A3 candidate d6abce2e (installed).",
+  "rebase_note": "Bases: cruise.py=C1 candidate 1abb8a1e (installed); longitudinal_planner.py=A3 candidate d6abce2e (installed). Validation deps updated to installed L2 carcontroller 5a03012c and tune-v6 latcontrol 0b6d5cf3. cruise.py removed from validation_dependencies (it is a target file, checked via files[]).",
   "software_validation_scope": "offline: py_compile, patch roundtrip byte-identical, constant-value unit test (validation/test_a3.py); climb-episode replay on fitted plant",
   "independent_of_tune_package": false,
   "layered_over": [
