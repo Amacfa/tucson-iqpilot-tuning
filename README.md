@@ -59,6 +59,24 @@ this car (Tesla/VW-only and e2e-only respectively) — see [settings audit](rese
 | **M1 MAIN-button no-disarm** ([package](candidates/mainbtn-M1), [log](candidates/INSTALL_LOG.md)) | `carstate.py` / `behavior.py`: pressing MAIN while the comma is on no longer toggles `main_enabled` off; app ends its lateral session (panda drops lateral on the MAIN falling edge), long keeps running; SET/RES arming and panda safety unchanged | 3 MAIN presses in the v6 drives turned the comma off and nothing engaged until SET; installed 2026-10-01, physical check pending |
 | **Fingerprint** ([report](candidates/fingerprint/REPORT.md)) — **built, NOT installed** | FW table entry (adds the 99211-CW020 camera FW under `HYUNDAI_TUCSON_4TH_GEN`) so the Tucson can auto-identify | today the platform is forced by the manual `CarPlatformBundle` pick (no FW query; `carFw` empty on every recent drive); the fix only matters if that pick is cleared. Install needs: apply parked, clear the manual pick, one ignition cycle to confirm `fingerprintSource=fw` |
 
+## Upstream PRs (Teal IQ.Pilot, base release-candidate @ 9007895, from fork rozal/IQ.Pilot)
+
+Eight PRs opened on https://git.konn3kt.com/IQ.Lvbs/IQ.Pilot — see
+[upstream/UPSTREAM_PRS.md](upstream/UPSTREAM_PRS.md) for the table, PR bodies
+and the opener script. The LFA-AB hyundaicanfd variant switch was excluded
+(variant 0 is byte-identical to unpatched).
+
+| PR | branch | local commit |
+|---|---|---|
+| [#23](https://git.konn3kt.com/IQ.Lvbs/IQ.Pilot/pulls/23) | fix/personality-button-blocking-put | `895fde1` |
+| [#24](https://git.konn3kt.com/IQ.Lvbs/IQ.Pilot/pulls/24) | hyundai/tucson-4th-gen-fw-cw020 | `4991462` |
+| [#25](https://git.konn3kt.com/IQ.Lvbs/IQ.Pilot/pulls/25) | hyundai/tucson-canfd-startup-arming | `250398a` |
+| [#26](https://git.konn3kt.com/IQ.Lvbs/IQ.Pilot/pulls/26) | hyundai/tucson-main-button-keeps-long (stacked on #25) | `4bfdacc` |
+| [#27](https://git.konn3kt.com/IQ.Lvbs/IQ.Pilot/pulls/27) | cruise/set-adopts-current-speed | `4934b28` |
+| [#28](https://git.konn3kt.com/IQ.Lvbs/IQ.Pilot/pulls/28) | hyundai/tucson-canfd-launch-smoothing | `1026647` |
+| [#29](https://git.konn3kt.com/IQ.Lvbs/IQ.Pilot/pulls/29) | hyundai/tucson-lateral-tune | `e6254fd` |
+| [#30](https://git.konn3kt.com/IQ.Lvbs/IQ.Pilot/pulls/30) | long/stop-and-cruise-tuning | `088a1f6` |
+
 ## Still open / watching
 
 - A3 first-drive evaluation.
