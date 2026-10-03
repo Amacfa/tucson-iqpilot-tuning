@@ -107,3 +107,7 @@ Physical A/B drive remains pending (`physical_validation_pending`).
 - `--check` -> `{"check_passed": true, "changes_made": false, "head": "3736edc..."}`.
 - **Applied** (user-approved, "Yes, install") at 2026-10-02T23:34Z -> `{"completed": "apply", "backup": "/data/iq-warning-backups/20261002T233441.590519Z-apply", "services_restarted": false}`; `--verify-installed` -> `{"installed_and_running_verified": true}`. On-device hashes: `cruise.py 9186434f643997d7516898abcca39e630c8b0cf55a200ae6bdb522f32f601080`, `longitudinal_planner.py 33788391e05af5429f8ac5cdab19947ed9aec2a374766f7dc6d16271604f24ae`. Live on next car start.
 - Physical check pending: engage (SET/RES/+/-) adopts current speed rounded to 5, floor 25 mph (no 65, no crawl target); lowering the set speed by <10 mph coasts for 5 s instead of braking ~1.4 m/s^2; hard-turn e2e accel budgeted by lateral accel (route-48 3:37 lurch would have been capped ~1.9 -> ~0.3 m/s^2).
+
+## 2026-10-03T03:58Z — comma reboot
+
+Full comma reboot (approved by Alex). Manager restarted 03:59:02; v6 (latcontrol_torque 001adc2c…), E1 (cruise 0a71db67…, longitudinal_planner 0f0586a2…) now loaded by the manager. Correction: earlier "live on next car start" wording was wrong — manager preimports driving modules at boot, so installs need a reboot. v6 and E1 were NOT active on the 10/02 drives (routes 49, 4d).
